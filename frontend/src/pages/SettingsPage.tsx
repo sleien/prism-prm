@@ -1,20 +1,25 @@
 import { type FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, UserMinus } from "lucide-react";
+import { Eye, EyeOff, Plus, Trash2, UserMinus } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Group, UserOut } from "@/lib/types";
+import type { Contact, Group, JournalTemplate, UserOut } from "@/lib/types";
 import { useAuth } from "@/auth/AuthContext";
 import { Button, Card, Input, Select } from "@/components/ui";
 
 export function SettingsPage() {
   const qc = useQueryClient();
-  const { me } = useAuth();
+  const { me, refresh } = useAuth();
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get<UserOut[]>("/api/users") });
   const { data: partners } = useQuery({
     queryKey: ["partners"],
     queryFn: () => api.get<UserOut[]>("/api/sharing/partners"),
   });
   const { data: groups } = useQuery({ queryKey: ["groups"], queryFn: () => api.get<Group[]>("/api/groups") });
+  const { data: contacts } = useQuery({ queryKey: ["contacts"], queryFn: () => api.get<Contact[]>("/api/contacts") });
+  const { data: journals } = useQuery({
+    queryKey: ["journal-templates"],
+    queryFn: () => api.get<JournalTemplate[]>("/api/journal/templates"),
+  });
 
   const partnerIds = new Set((partners ?? []).map((p) => p.id));
   const others = (users ?? []).filter((u) => u.id !== me?.user.id);
@@ -32,6 +37,21 @@ export function SettingsPage() {
     await api.post<Group>("/api/groups", { name: groupName });
     setGroupName("");
     await qc.invalidateQueries({ queryKey: ["groups"] });
+  }
+
+  async function toggleJournal(id: number, active: boolean) {
+    await api.patch(`/api/journal/templates/${id}`, { active });
+    await qc.invalidateQueries({ queryKey: ["journal-templates"] });
+  }
+  async function deleteJournal(id: number) {
+    if (!confirm("Delete this journal and all its entries?")) return;
+    await api.del(`/api/journal/templates/${id}`);
+    await qc.invalidateQueries({ queryKey: ["journal-templates"] });
+  }
+
+  async function setSelfContact(value: string) {
+    await api.put("/api/auth/self-contact", { contact_id: value ? Number(value) : null });
+    await refresh();
   }
 
   return (
@@ -92,6 +112,61 @@ export function SettingsPage() {
             <p className="text-sm text-muted-foreground">No groups yet.</p>
           )}
         </div>
+      </Card>
+
+      <Card className="p-5">
+        <div className="mb-1 font-medium">This is me</div>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Pick the contact that represents you, so you can appear in relationships (e.g. “Partner: You”).
+        </p>
+        <Select
+          className="max-w-sm"
+          value={me?.self_contact_id ? String(me.self_contact_id) : ""}
+          onChange={(e) => void setSelfContact(e.target.value)}
+        >
+          <option value="">Not set</option>
+          {(contacts ?? []).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.display_name}
+            </option>
+          ))}
+        </Select>
+      </Card>
+
+      <Card className="p-5">
+        <div className="mb-1 font-medium">Journals</div>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Hide a journal to remove it from the Journal page without losing its entries, or delete it.
+        </p>
+        {(journals ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">No journals yet.</p>
+        ) : (
+          <ul className="divide-y divide-border/50">
+            {(journals ?? []).map((j) => (
+              <li key={j.id} className="flex items-center justify-between gap-3 py-2">
+                <span className={j.active ? "" : "text-muted-foreground line-through"}>
+                  {j.name} <span className="text-xs text-muted-foreground">({j.cadence})</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => void toggleJournal(j.id, !j.active)}
+                    title={j.active ? "Hide" : "Show"}
+                    className="rounded-md p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                  >
+                    {j.active ? <Eye size={16} /> : <EyeOff size={16} />}
+                  </button>
+                  <button
+                    onClick={() => void deleteJournal(j.id)}
+                    title="Delete"
+                    className="rounded-md p-1.5 text-muted-foreground transition hover:text-destructive"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );

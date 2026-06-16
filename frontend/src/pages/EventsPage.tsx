@@ -2,7 +2,7 @@ import { type FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Coins, MapPin, Plus, Trash2, Users } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { CalEvent, Contact, Group, Visibility } from "@/lib/types";
+import type { CalEvent, Contact, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
 
@@ -20,6 +20,14 @@ function fmt(iso: string, allDay: boolean): string {
     : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
+// A local-time value for a date or datetime-local input set to "now".
+function nowValue(allDay: boolean): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return allDay ? date : `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function EventsPage() {
   const qc = useQueryClient();
   const { data: events, isLoading, error } = useQuery({
@@ -30,7 +38,6 @@ export function EventsPage() {
     queryKey: ["contacts"],
     queryFn: () => api.get<Contact[]>("/api/contacts"),
   });
-  const { data: groups } = useQuery({ queryKey: ["groups"], queryFn: () => api.get<Group[]>("/api/groups") });
   const contactName = (id: number | null) =>
     contacts?.find((c) => c.id === id)?.display_name ?? "Someone";
 
@@ -42,7 +49,7 @@ export function EventsPage() {
   const [cost, setCost] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [visibility, setVisibility] = useState<Visibility>("private");
-  const [groupId, setGroupId] = useState<string>("");
+  const [allDay, setAllDay] = useState(false);
   const [attendees, setAttendees] = useState<number[]>([]);
   const [reminder, setReminder] = useState(60);
   const [busy, setBusy] = useState(false);
@@ -57,15 +64,18 @@ export function EventsPage() {
     setFormErr(null);
     setBusy(true);
     try {
+      // For all-day events we anchor at noon UTC so the date stays stable across
+      // time zones; the all_day flag tells the calendar to ignore the time.
+      const toIso = (v: string) => (allDay ? `${v}T12:00:00Z` : new Date(v).toISOString());
       const body: Record<string, unknown> = {
         title,
-        starts_at: new Date(start).toISOString(),
+        starts_at: toIso(start),
+        all_day: allDay,
         visibility,
-        group_id: visibility === "group" && groupId ? Number(groupId) : null,
         attendee_contact_ids: attendees,
         reminders: reminder >= 0 ? [{ minutes_before: reminder }] : [],
       };
-      if (end) body.ends_at = new Date(end).toISOString();
+      if (end) body.ends_at = toIso(end);
       if (location) body.location = location;
       if (cost) {
         body.cost_amount = cost;
@@ -120,21 +130,36 @@ export function EventsPage() {
                 placeholder="Dinner with Grace"
               />
             </div>
+            <label htmlFor="e-allday" className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input
+                id="e-allday"
+                type="checkbox"
+                checked={allDay}
+                onChange={(e) => setAllDay(e.target.checked)}
+                className="h-4 w-4 accent-[hsl(var(--primary))]"
+              />
+              All day (date only)
+            </label>
             <div>
               <Label htmlFor="e-start">Starts</Label>
-              <Input
-                id="e-start"
-                type="datetime-local"
-                required
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="e-start"
+                  type={allDay ? "date" : "datetime-local"}
+                  required
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
+                <Button type="button" variant="secondary" onClick={() => setStart(nowValue(allDay))}>
+                  Today
+                </Button>
+              </div>
             </div>
             <div>
               <Label htmlFor="e-end">Ends (optional)</Label>
               <Input
                 id="e-end"
-                type="datetime-local"
+                type={allDay ? "date" : "datetime-local"}
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
               />
@@ -182,23 +207,10 @@ export function EventsPage() {
                 onChange={(e) => setVisibility(e.target.value as Visibility)}
               >
                 <option value="public">Public — all users</option>
-                <option value="group">Group — attendees</option>
+                <option value="group">Group — all attendees can see</option>
                 <option value="private">Private — you + partners</option>
               </Select>
             </div>
-            {visibility === "group" && (
-              <div>
-                <Label htmlFor="e-group">Group</Label>
-                <Select id="e-group" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-                  <option value="">Choose a group…</option>
-                  {(groups ?? []).map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
             {contacts && contacts.length > 0 && (
               <div className="sm:col-span-2">
                 <Label>Attendees</Label>

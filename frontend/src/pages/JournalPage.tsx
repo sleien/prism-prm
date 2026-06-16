@@ -24,8 +24,10 @@ export function JournalPage() {
     queryFn: () => api.get<JournalTemplate[]>("/api/journal/templates"),
   });
 
+  // Hidden (inactive) journals are managed from Settings and don't show here.
+  const visible = (templates ?? []).filter((t) => t.active);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const selected = templates?.find((t) => t.id === selectedId) ?? templates?.[0] ?? null;
+  const selected = visible.find((t) => t.id === selectedId) ?? visible[0] ?? null;
 
   // --- create-template form ---
   const [showCreate, setShowCreate] = useState(false);
@@ -160,16 +162,16 @@ export function JournalPage() {
         </Card>
       )}
 
-      {templates && templates.length === 0 && !showCreate && (
+      {visible.length === 0 && !showCreate && (
         <Card className="p-8 text-center text-muted-foreground">
           No journals yet. Create one — add a mood scale and a prompt or two, set a reminder time,
-          and it’ll nudge you from your Nextcloud calendar.
+          and it’ll nudge you from your Nextcloud calendar. (Hidden journals live in Settings.)
         </Card>
       )}
 
-      {templates && templates.length > 0 && (
+      {visible.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {templates.map((t) => (
+          {visible.map((t) => (
             <button
               key={t.id}
               onClick={() => setSelectedId(t.id)}

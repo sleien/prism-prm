@@ -19,7 +19,7 @@ from app.auth.security import (
 )
 from app.config import settings
 from app.db import get_session
-from app.models import ApiToken, Group, GroupMembership, User
+from app.models import ApiToken, Contact, Group, GroupMembership, User
 from app.schemas.auth import (
     ApiTokenCreatedOut,
     ApiTokenCreateIn,
@@ -28,8 +28,10 @@ from app.schemas.auth import (
     LoginIn,
     MeOut,
     RegisterIn,
+    SelfContactIn,
     UserOut,
 )
+from app.visibility import visibility_filter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -49,7 +51,11 @@ async def _group_names(session: AsyncSession, user: User) -> list[str]:
 
 
 async def build_me(session: AsyncSession, user: User) -> MeOut:
-    return MeOut(user=UserOut.model_validate(user), groups=await _group_names(session, user))
+    return MeOut(
+        user=UserOut.model_validate(user),
+        groups=await _group_names(session, user),
+        self_contact_id=user.self_contact_id,
+    )
 
 
 async def _sync_groups_from_claim(session: AsyncSession, user: User, claim: list[str]) -> None:
@@ -151,6 +157,26 @@ async def refresh(
 async def me(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> MeOut:
+    return await build_me(session, user)
+
+
+@router.put("/self-contact", response_model=MeOut)
+async def set_self_contact(
+    payload: SelfContactIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> MeOut:
+    """Designate which contact represents the current user (their "me")."""
+    if payload.contact_id is not None:
+        filt = await visibility_filter(session, user, Contact)
+        visible = await session.scalar(
+            select(Contact.id).where(Contact.id == payload.contact_id, filt)
+        )
+        if visible is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Contact not found")
+    user.self_contact_id = payload.contact_id
+    await session.commit()
+    await session.refresh(user)
     return await build_me(session, user)
 
 

@@ -30,6 +30,11 @@ class UserOut(BaseModel):
 class MeOut(BaseModel):
     user: UserOut
     groups: list[str] = []
+    self_contact_id: int | None = None
+
+
+class SelfContactIn(BaseModel):
+    contact_id: int | None = None
 
 
 class AuthConfigOut(BaseModel):

@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
+import { useAuth } from "@/auth/AuthContext";
 
 function ageFrom(bday?: string | null): number | null {
   if (!bday) return null;
@@ -384,7 +385,9 @@ function RelationshipsSection({ contactId }: { contactId: number }) {
     await qc.invalidateQueries({ queryKey: ["relationships", contactId] });
   }
 
-  const others = (contacts ?? []).filter((c) => c.id !== contactId);
+  const { me } = useAuth();
+  const selfId = me?.self_contact_id ?? null;
+  const others = (contacts ?? []).filter((c) => c.id !== contactId && c.id !== selfId);
 
   return (
     <Card className="p-5">
@@ -395,6 +398,7 @@ function RelationshipsSection({ contactId }: { contactId: number }) {
             <span className="text-muted-foreground">{r.label}:</span>
             <Link to={`/contacts/${r.contact_id}`} className="hover:underline">
               {r.contact_name}
+              {r.contact_id === selfId ? " (you)" : ""}
             </Link>
             <button onClick={() => void remove(r.relationship_id)} className="text-muted-foreground hover:text-destructive">
               <Trash2 size={13} />
@@ -414,6 +418,7 @@ function RelationshipsSection({ contactId }: { contactId: number }) {
         </Select>
         <Select value={other} onChange={(e) => setOther(e.target.value)} className="w-48">
           <option value="">Who…</option>
+          {selfId && selfId !== contactId && <option value={selfId}>⭐ Me</option>}
           {others.map((c) => (
             <option key={c.id} value={c.id}>
               {c.display_name}

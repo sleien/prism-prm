@@ -8,6 +8,7 @@ export interface UserOut {
 export interface Me {
   user: UserOut;
   groups: string[];
+  self_contact_id?: number | null;
 }
 
 export interface AuthConfig {

@@ -28,6 +28,10 @@ class User(Base, TimestampMixin):
     oidc_subject: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Which contact represents this user ("me" in relationships). Soft reference
+    # (no FK) to avoid a user<->contact dependency cycle; existence is checked
+    # at the app layer.
+    self_contact_id: Mapped[int | None] = mapped_column(nullable=True)
 
 
 class Group(Base, TimestampMixin):

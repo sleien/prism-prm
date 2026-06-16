@@ -48,16 +48,18 @@ class EventBase(BaseModel):
     visibility: Visibility = Visibility.PRIVATE
     group_id: int | None = None
 
+
+class EventCreate(EventBase):
+    attendee_contact_ids: list[int] = Field(default_factory=list)
+    reminders: list[ReminderIn] = Field(default_factory=list)
+
+    # Validate time order on input only — never on EventOut serialization, so a
+    # pre-existing row with odd times can still be read back.
     @model_validator(mode="after")
     def _check_times(self):
         if self.ends_at and self.ends_at < self.starts_at:
             raise ValueError("ends_at must not be before starts_at")
         return self
-
-
-class EventCreate(EventBase):
-    attendee_contact_ids: list[int] = Field(default_factory=list)
-    reminders: list[ReminderIn] = Field(default_factory=list)
 
 
 class EventUpdate(BaseModel):
