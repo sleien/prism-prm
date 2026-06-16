@@ -12,8 +12,10 @@ visibility so families and circles can share what they choose.
 
 </div>
 
-> **Status:** early development. Phase 1 (auth + Nextcloud contact sync) is being
-> built first; see the [roadmap](#roadmap).
+> **Status:** all core phases implemented and tested end-to-end against a
+> Nextcloud-compatible DAV server (auth, contacts, events, journal, summaries,
+> sharing, weather), with an adversarial QA hardening pass. See the
+> [roadmap](#roadmap).
 
 ---
 
@@ -147,11 +149,15 @@ Dockerfile docker-compose.yml          production (Traefik/Authentik labels)
 
 ## Roadmap
 
-- **Phase 1** — scaffold, auth (OIDC + local), Nextcloud contact sync, contacts UI.
-- **Phase 2** — events + cost, CalDAV push, VALARM reminders, calendar UI.
-- **Phase 3** — journal / feeling tracker, summaries.
-- **Phase 4** — hardened visibility (+ Postgres RLS), weather, per-user Nextcloud linking.
-- **Phase 5** — end-to-end hardening, accessibility, polish.
+- ✅ **Phase 1** — scaffold, auth (OIDC + local), Nextcloud contact sync, contacts UI.
+- ✅ **Phase 2** — events + cost, CalDAV push, VALARM reminders, events UI.
+- ✅ **Phase 3** — journal / feeling tracker, dashboard summaries.
+- ✅ **Phase 4** — query-layer visibility (public/group/private + partners), weather.
+- ✅ **Phase 5** — adversarial QA hardening pass (auth, validation, visibility leaks).
+
+Future ideas: PostgreSQL row-level security (defense-in-depth), per-user
+Nextcloud account linking, a full month/week calendar grid, recurring-event
+editing, and web-push notifications.
 
 ## License
 
