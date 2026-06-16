@@ -21,3 +21,6 @@ test/radicale/data/
 # OS / editor
 .DS_Store
 *.swp
+
+# Local tooling
+.claude/launch.json
