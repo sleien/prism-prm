@@ -1,0 +1,16 @@
+**/.git
+**/.github
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.venv
+**/*.egg-info
+**/.env
+**/.env.*
+!**/.env.example
+**/data
+**/.DS_Store
+docker-compose*.yml
+test/

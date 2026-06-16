@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Env & data
+.env
+.env.*
+!.env.example
+data/
+test/radicale/data/
+
+# OS / editor
+.DS_Store
+*.swp

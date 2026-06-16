@@ -1,0 +1,63 @@
+# Prism — local dev / test stack. No Traefik; ports exposed directly on localhost.
+#
+# A Radicale server stands in for Nextcloud's CardDAV + CalDAV (it speaks the
+# same RFC 4791/6352), so contact/calendar sync and its edge cases can be
+# hammered fast in CI without a heavyweight Nextcloud. A real-Nextcloud smoke
+# test is run separately during the hardening phase.
+#
+#   docker compose -f docker-compose.test.yml up --build
+services:
+  prism:
+    build: .
+    container_name: prism-dev
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: dev-secret-not-for-production
+      DATABASE_URL: postgresql+asyncpg://prism:prism@db:5432/prism
+      DATA_DIR: /data
+      PUBLIC_URL: http://localhost:8000
+      COOKIE_SECURE: "false"
+      OIDC_ENABLED: "false"
+      ALLOW_REGISTRATION: "true"
+      NEXTCLOUD_URL: http://radicale:5232
+      NEXTCLOUD_USERNAME: test
+      NEXTCLOUD_APP_PASSWORD: test
+      NEXTCLOUD_ADDRESSBOOK: contacts
+      NEXTCLOUD_CALENDAR: personal
+      SYNC_INTERVAL_MINUTES: "5"
+      WEATHER_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      radicale:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - prism-dev-data:/data
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prism
+      POSTGRES_PASSWORD: prism
+      POSTGRES_DB: prism
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prism"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Lightweight CardDAV/CalDAV server used as the Nextcloud stand-in for tests.
+  radicale:
+    image: tomsquest/docker-radicale:latest
+    ports:
+      - "5232:5232"
+    volumes:
+      - ./test/radicale/config:/config/config:ro
+      - ./test/radicale/users:/config/users:ro
+      - radicale-data:/data
+
+volumes:
+  prism-dev-data:
+  radicale-data:

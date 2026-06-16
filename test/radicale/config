@@ -1,0 +1,15 @@
+# Radicale config for the Prism test stack (Nextcloud stand-in).
+[server]
+hosts = 0.0.0.0:5232
+
+[auth]
+type = htpasswd
+htpasswd_filename = /config/users
+# Plain text is fine for a disposable test server. Never do this in production.
+htpasswd_encryption = plain
+
+[storage]
+filesystem_folder = /data/collections
+
+[rights]
+type = owner_only

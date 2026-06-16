@@ -1,0 +1,73 @@
+# Prism — personal relationship manager.
+# Behind Traefik on the shared `proxy` network, same pattern as your other apps.
+#
+# IMPORTANT: unlike music-it, Prism does its OWN auth via Authentik OIDC
+# (in-app), so there is deliberately NO authentik forward-auth middleware on the
+# router below — adding one would double up the login. Prism reads the Authentik
+# `groups` claim itself to drive public/group/private visibility.
+#
+# Copy .env.example -> .env first.
+services:
+  prism:
+    # Pull the prebuilt multi-arch image from GHCR:
+    image: ${IMAGE:-ghcr.io/sleien/prism-prm:latest}
+    # ...or build locally instead (comment out `image:` above and uncomment):
+    # build: .
+    container_name: ${APP_NAME:-prism}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-prism}:${POSTGRES_PASSWORD:-prism}@db:5432/${POSTGRES_DB:-prism}
+      DATA_DIR: /data
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - prism-data:/data
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${APP_NAME:-prism}.rule=Host(`${APP_NAME:-prism}.${ROOT_PATH}`)
+      - traefik.http.routers.${APP_NAME:-prism}.entrypoints=websecure
+      - traefik.http.routers.${APP_NAME:-prism}.tls.certresolver=le
+      - traefik.http.services.${APP_NAME:-prism}.loadbalancer.server.port=8000
+      # Homepage dashboard tile
+      - homepage.group=Hobby
+      - homepage.name=${FRIENDLY_NAME:-Prism}
+      - homepage.icon=mdi-account-heart
+      - homepage.href=https://${APP_NAME:-prism}.${ROOT_PATH}
+      - homepage.description=Personal relationship manager
+      # Uptime-Kuma autodiscovery
+      - kuma.${APP_NAME:-prism}.http.name=${FRIENDLY_NAME:-Prism}
+      - kuma.${APP_NAME:-prism}.http.url=https://${APP_NAME:-prism}.${ROOT_PATH}
+    networks:
+      - proxy      # reachable by Traefik
+      - internal   # talks to the database
+
+  db:
+    image: postgres:16-alpine
+    container_name: ${APP_NAME:-prism}-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-prism}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prism}
+      POSTGRES_DB: ${POSTGRES_DB:-prism}
+    volumes:
+      - prism-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-prism}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal   # not exposed to Traefik
+
+volumes:
+  prism-data:
+  prism-db:
+
+networks:
+  proxy:
+    name: proxy
+    external: true
+  internal:
+    driver: bridge
