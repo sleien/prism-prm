@@ -24,11 +24,11 @@ class AddressItem(BaseModel):
 
 
 class ContactBase(BaseModel):
-    display_name: str = ""
-    first_name: str | None = None
-    last_name: str | None = None
-    organization: str | None = None
-    job_title: str | None = None
+    display_name: str = Field(default="", max_length=300)
+    first_name: str | None = Field(default=None, max_length=200)
+    last_name: str | None = Field(default=None, max_length=200)
+    organization: str | None = Field(default=None, max_length=300)
+    job_title: str | None = Field(default=None, max_length=200)
     birthday: date | None = None
     notes: str | None = None
     emails: list[TypedValue] = Field(default_factory=list)
@@ -43,11 +43,11 @@ class ContactCreate(ContactBase):
 
 
 class ContactUpdate(BaseModel):
-    display_name: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    organization: str | None = None
-    job_title: str | None = None
+    display_name: str | None = Field(default=None, max_length=300)
+    first_name: str | None = Field(default=None, max_length=200)
+    last_name: str | None = Field(default=None, max_length=200)
+    organization: str | None = Field(default=None, max_length=300)
+    job_title: str | None = Field(default=None, max_length=200)
     birthday: date | None = None
     notes: str | None = None
     emails: list[TypedValue] | None = None

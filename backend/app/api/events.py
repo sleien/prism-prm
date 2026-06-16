@@ -18,7 +18,7 @@ from app.models import Contact, Event, EventAttendee, Reminder, User
 from app.schemas.event import EventCreate, EventOut, EventUpdate, ReminderIn
 from app.services.calendar_sync import delete_event_remote, push_event
 from app.services.weather import enrich_event_weather
-from app.visibility import event_visibility_filter, visibility_filter
+from app.visibility import event_visibility_filter, validate_group_choice, visibility_filter
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -120,6 +120,9 @@ async def create_event(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Event:
+    await validate_group_choice(
+        session, user, payload.visibility, payload.group_id, require_group=False
+    )
     data = payload.model_dump(exclude={"attendee_contact_ids", "reminders"})
     event = Event(owner_id=user.id, **data)
     session.add(event)
@@ -147,12 +150,15 @@ async def update_event(
     event = await _load(session, event_id)
     if event is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
-    if event.owner_id != user.id and not user.is_superuser:
+    if event.owner_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your event")
 
     updates = payload.model_dump(exclude_unset=True, exclude={"attendee_contact_ids", "reminders"})
     for key, value in updates.items():
         setattr(event, key, value)
+    await validate_group_choice(
+        session, user, event.visibility, event.group_id, require_group=False
+    )
 
     contact_ids: list[int] | None = None
     if payload.attendee_contact_ids is not None:
@@ -186,7 +192,7 @@ async def delete_event(
     event = await session.get(Event, event_id)
     if event is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
-    if event.owner_id != user.id and not user.is_superuser:
+    if event.owner_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your event")
     try:
         await delete_event_remote(event)

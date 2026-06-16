@@ -8,7 +8,8 @@ on top in a later phase.
 
 from __future__ import annotations
 
-from sqlalchemy import ColumnElement, and_, or_, select, true
+from fastapi import HTTPException, status
+from sqlalchemy import ColumnElement, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import Visibility
@@ -35,10 +36,10 @@ async def visibility_filter(session: AsyncSession, user: User, model) -> ColumnE
     """Build a WHERE clause selecting only rows of `model` visible to `user`.
 
     `model` must expose `owner_id`, `visibility`, and `group_id` columns.
-    """
-    if user.is_superuser:
-        return true()
 
+    Admins are NOT exempt: the private tier protects every user's data, including
+    from the instance admin (consistent with how journals are owner-scoped).
+    """
     conditions: list[ColumnElement[bool]] = [
         model.owner_id == user.id,
         model.visibility == Visibility.PUBLIC,
@@ -67,7 +68,31 @@ async def event_visibility_filter(session: AsyncSession, user: User) -> ColumnEl
     regardless of its base visibility.
     """
     base = await visibility_filter(session, user, Event)
-    if user.is_superuser:
-        return base
+    # Attending grants visibility only for non-private events, so someone can't
+    # leak a PRIVATE event into another user's view just by listing them as an
+    # attendee — private stays owner + designated partners only.
     attended = select(EventAttendee.event_id).where(EventAttendee.user_id == user.id)
-    return or_(base, Event.id.in_(attended))
+    return or_(base, and_(Event.visibility != Visibility.PRIVATE, Event.id.in_(attended)))
+
+
+async def validate_group_choice(
+    session: AsyncSession,
+    user: User,
+    visibility: str,
+    group_id: int | None,
+    *,
+    require_group: bool = True,
+) -> None:
+    """Validate the group target on a record.
+
+    Any provided group_id must reference a group the user belongs to (prevents
+    FK-violation 500s and stops a non-member from targeting another group). When
+    no group is chosen, contacts require one for GROUP visibility, while events
+    pass `require_group=False` because their GROUP tier means "all who attend".
+    """
+    if group_id is not None:
+        if group_id not in await user_group_ids(session, user):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "You are not a member of that group")
+        return
+    if visibility == Visibility.GROUP and require_group:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A group is required for group visibility")

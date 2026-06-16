@@ -5,15 +5,15 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.constants import Visibility
 
 
 class ReminderIn(BaseModel):
-    # Minutes before the event start to fire the reminder.
-    minutes_before: int = 60
-    message: str | None = None
+    # Minutes before the event start to fire the reminder (0 .. ~1 year).
+    minutes_before: int = Field(default=60, ge=0, le=525600)
+    message: str | None = Field(default=None, max_length=500)
 
 
 class ReminderOut(BaseModel):
@@ -36,17 +36,23 @@ class AttendeeOut(BaseModel):
 
 
 class EventBase(BaseModel):
-    title: str
+    title: str = Field(max_length=300)
     description: str | None = None
     starts_at: datetime
     ends_at: datetime | None = None
     all_day: bool = False
-    rrule: str | None = None
-    location: str | None = None
-    cost_amount: Decimal | None = None
-    cost_currency: str | None = None
+    rrule: str | None = Field(default=None, max_length=500)
+    location: str | None = Field(default=None, max_length=500)
+    cost_amount: Decimal | None = Field(default=None, ge=0, le=10**10)
+    cost_currency: str | None = Field(default=None, max_length=3)
     visibility: Visibility = Visibility.PRIVATE
     group_id: int | None = None
+
+    @model_validator(mode="after")
+    def _check_times(self):
+        if self.ends_at and self.ends_at < self.starts_at:
+            raise ValueError("ends_at must not be before starts_at")
+        return self
 
 
 class EventCreate(EventBase):
@@ -55,15 +61,15 @@ class EventCreate(EventBase):
 
 
 class EventUpdate(BaseModel):
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=300)
     description: str | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     all_day: bool | None = None
-    rrule: str | None = None
-    location: str | None = None
-    cost_amount: Decimal | None = None
-    cost_currency: str | None = None
+    rrule: str | None = Field(default=None, max_length=500)
+    location: str | None = Field(default=None, max_length=500)
+    cost_amount: Decimal | None = Field(default=None, ge=0, le=10**10)
+    cost_currency: str | None = Field(default=None, max_length=3)
     visibility: Visibility | None = None
     group_id: int | None = None
     attendee_contact_ids: list[int] | None = None

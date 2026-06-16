@@ -14,7 +14,7 @@ from app.auth.deps import get_current_user
 from app.db import get_session
 from app.models import Group, GroupMembership, Partnership, User
 from app.schemas.auth import UserOut
-from app.schemas.sharing import GroupCreate, GroupOut
+from app.schemas.sharing import DirectoryUser, GroupCreate, GroupOut
 
 router = APIRouter(tags=["sharing"])
 
@@ -22,7 +22,7 @@ router = APIRouter(tags=["sharing"])
 # --- users directory --------------------------------------------------------
 
 
-@router.get("/users", response_model=list[UserOut])
+@router.get("/users", response_model=list[DirectoryUser])
 async def list_users(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[User]:
@@ -132,7 +132,7 @@ async def group_members(
     session: AsyncSession = Depends(get_session),
 ) -> list[User]:
     ids = await _member_ids(session, group_id)
-    if user.id not in ids and not user.is_superuser:
+    if user.id not in ids:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not a member of this group")
     rows = await session.scalars(select(User).where(User.id.in_(ids)).order_by(User.display_name))
     return list(rows.all())
@@ -145,7 +145,7 @@ async def add_member(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    if user.id not in await _member_ids(session, group_id) and not user.is_superuser:
+    if user.id not in await _member_ids(session, group_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not a member of this group")
     if await session.get(User, member_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
@@ -167,7 +167,7 @@ async def remove_member(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    if user.id not in await _member_ids(session, group_id) and not user.is_superuser:
+    if user.id not in await _member_ids(session, group_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not a member of this group")
     row = await session.scalar(
         select(GroupMembership).where(

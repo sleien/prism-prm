@@ -23,7 +23,7 @@ class Prompt(BaseModel):
 
 
 class JournalTemplateBase(BaseModel):
-    name: str
+    name: str = Field(max_length=200)
     cadence: Cadence = Cadence.DAILY
     prompts: list[Prompt] = Field(default_factory=list)
     reminder_time: time | None = None
@@ -36,7 +36,7 @@ class JournalTemplateCreate(JournalTemplateBase):
 
 
 class JournalTemplateUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=200)
     cadence: Cadence | None = None
     prompts: list[Prompt] | None = None
     reminder_time: time | None = None

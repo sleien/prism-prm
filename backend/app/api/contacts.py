@@ -14,14 +14,14 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import get_current_user
+from app.auth.deps import get_current_user, require_admin
 from app.config import settings
 from app.db import get_session
 from app.integrations.nextcloud import DavError, NextcloudClient
 from app.models import Contact, User
 from app.schemas.contact import ContactCreate, ContactOut, ContactUpdate
 from app.services.sync import SyncResult, sync_contacts
-from app.visibility import visibility_filter
+from app.visibility import validate_group_choice, visibility_filter
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 
@@ -30,11 +30,11 @@ def _to_dicts(items) -> list[dict]:
     return [i.model_dump() if hasattr(i, "model_dump") else dict(i) for i in (items or [])]
 
 
-async def _owned_or_admin(session: AsyncSession, user: User, contact_id: int) -> Contact:
+async def _owned(session: AsyncSession, user: User, contact_id: int) -> Contact:
     contact = await session.get(Contact, contact_id)
     if contact is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contact not found")
-    if contact.owner_id != user.id and not user.is_superuser:
+    if contact.owner_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your contact")
     return contact
 
@@ -67,6 +67,7 @@ async def create_contact(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Contact:
+    await validate_group_choice(session, user, payload.visibility, payload.group_id)
     data = payload.model_dump()
     data["emails"] = _to_dicts(payload.emails)
     data["phones"] = _to_dicts(payload.phones)
@@ -90,13 +91,14 @@ async def update_contact(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Contact:
-    contact = await _owned_or_admin(session, user, contact_id)
+    contact = await _owned(session, user, contact_id)
     updates = payload.model_dump(exclude_unset=True)
     for field in ("emails", "phones", "addresses"):
         if field in updates and updates[field] is not None:
             updates[field] = _to_dicts(getattr(payload, field))
     for key, value in updates.items():
         setattr(contact, key, value)
+    await validate_group_choice(session, user, contact.visibility, contact.group_id)
     contact.dirty = True
     await session.commit()
     await session.refresh(contact)
@@ -109,7 +111,7 @@ async def delete_contact(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    contact = await _owned_or_admin(session, user, contact_id)
+    contact = await _owned(session, user, contact_id)
     # Remove from Nextcloud first so the next sync does not resurrect it.
     if contact.nextcloud_href and settings.nextcloud_configured:
         try:
@@ -126,7 +128,7 @@ async def delete_contact(
 
 @router.post("/sync", response_model=SyncResult)
 async def trigger_sync(
-    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+    user: User = Depends(require_admin), session: AsyncSession = Depends(get_session)
 ) -> SyncResult:
-    """Run a contact sync now (instance-wide)."""
+    """Run a contact sync now. Instance-wide, so restricted to admins."""
     return await sync_contacts(session)
