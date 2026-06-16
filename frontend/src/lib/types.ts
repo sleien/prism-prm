@@ -61,3 +61,39 @@ export interface SyncResult {
   skipped_reason?: string | null;
   errors: string[];
 }
+
+export interface EventReminder {
+  id: number;
+  message: string;
+  remind_at: string;
+  channel: string;
+  done: boolean;
+}
+
+export interface EventAttendee {
+  id: number;
+  contact_id: number | null;
+  user_id: number | null;
+  status: string;
+}
+
+// Named CalEvent to avoid clashing with the DOM's global Event type.
+export interface CalEvent {
+  id: number;
+  owner_id: number;
+  title: string;
+  description?: string | null;
+  starts_at: string;
+  ends_at?: string | null;
+  all_day: boolean;
+  location?: string | null;
+  cost_amount?: string | null;
+  cost_currency?: string | null;
+  visibility: Visibility;
+  group_id?: number | null;
+  attendees: EventAttendee[];
+  reminders: EventReminder[];
+  nextcloud_uid?: string | null;
+  last_synced_at?: string | null;
+  weather?: Record<string, unknown> | null;
+}

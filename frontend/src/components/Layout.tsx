@@ -13,7 +13,7 @@ interface NavItem {
 
 const nav: NavItem[] = [
   { to: "/contacts", label: "Contacts", icon: <Users size={18} /> },
-  { to: "/events", label: "Events", icon: <CalendarDays size={18} />, disabled: true },
+  { to: "/events", label: "Events", icon: <CalendarDays size={18} /> },
   { to: "/journal", label: "Journal", icon: <NotebookPen size={18} />, disabled: true },
 ];
 
