@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Coins, MapPin, Plus, Trash2, Users } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { CalEvent, Contact, EventType, Visibility } from "@/lib/types";
-import { Badge, Button, Card, Input, Label, Select } from "@/components/ui";
+import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
 import { useAuth } from "@/auth/AuthContext";
 
@@ -61,6 +61,8 @@ export function EventsPage() {
   const [eventType, setEventType] = useState("");
   const [allDay, setAllDay] = useState(false);
   const [attendees, setAttendees] = useState<number[]>([]);
+  const [attendeeSearch, setAttendeeSearch] = useState("");
+  const [description, setDescription] = useState("");
   const [reminder, setReminder] = useState(60);
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
@@ -68,6 +70,10 @@ export function EventsPage() {
   function toggleAttendee(id: number) {
     setAttendees((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
   }
+
+  const attendeeMatches = (contacts ?? []).filter(
+    (c) => attendees.includes(c.id) || c.display_name.toLowerCase().includes(attendeeSearch.toLowerCase()),
+  );
 
   async function createEvent(e: FormEvent) {
     e.preventDefault();
@@ -88,6 +94,7 @@ export function EventsPage() {
       };
       if (end) body.ends_at = toIso(end);
       if (location) body.location = location;
+      if (description) body.description = description;
       if (cost) {
         body.cost_amount = cost;
         body.cost_currency = currency;
@@ -99,6 +106,8 @@ export function EventsPage() {
       setLocation("");
       setCost("");
       setAttendees([]);
+      setAttendeeSearch("");
+      setDescription("");
       setEventType("");
       setShowForm(false);
       await qc.invalidateQueries({ queryKey: ["events"] });
@@ -237,8 +246,14 @@ export function EventsPage() {
             {contacts && contacts.length > 0 && (
               <div className="sm:col-span-2">
                 <Label>Attendees</Label>
-                <div className="flex flex-wrap gap-2">
-                  {contacts.map((c) => (
+                <Input
+                  className="mb-2"
+                  placeholder="Search contacts…"
+                  value={attendeeSearch}
+                  onChange={(e) => setAttendeeSearch(e.target.value)}
+                />
+                <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto">
+                  {attendeeMatches.map((c) => (
                     <button
                       key={c.id}
                       type="button"
@@ -253,9 +268,21 @@ export function EventsPage() {
                       {c.display_name}
                     </button>
                   ))}
+                  {attendeeMatches.length === 0 && (
+                    <span className="text-sm text-muted-foreground">No matches.</span>
+                  )}
                 </div>
               </div>
             )}
+            <div className="sm:col-span-2">
+              <Label htmlFor="e-notes">Notes (shared with everyone who can see this event)</Label>
+              <Textarea
+                id="e-notes"
+                rows={2}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
             <div className="flex items-center gap-2 sm:col-span-2">
               <Button type="submit" disabled={busy}>
                 {busy ? "Saving…" : "Create event"}

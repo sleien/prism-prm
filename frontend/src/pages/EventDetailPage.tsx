@@ -23,6 +23,13 @@ function toLocalInput(iso: string, allDay: boolean): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function nowValue(allDay: boolean): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return allDay ? date : `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
@@ -60,6 +67,8 @@ export function EventDetailPage() {
   const [visibility, setVisibility] = useState<Visibility>("private");
   const [eventType, setEventType] = useState("");
   const [picked, setPicked] = useState<number[]>([]);
+  const [attendeeSearch, setAttendeeSearch] = useState("");
+  const [description, setDescription] = useState("");
   const [reminder, setReminder] = useState("keep");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -77,6 +86,7 @@ export function EventDetailPage() {
     setVisibility(event.visibility);
     setEventType(event.event_type ?? "");
     setPicked(event.attendees.map((a) => a.contact_id).filter((x): x is number => x != null));
+    setDescription(event.description ?? "");
     setReminder("keep");
   }, [event, me]);
 
@@ -97,6 +107,7 @@ export function EventDetailPage() {
         cost_currency: cost ? currency : null,
         visibility,
         event_type: eventType || null,
+        description: description || null,
         attendee_contact_ids: picked,
       };
       if (reminder !== "keep") {
@@ -176,12 +187,17 @@ export function EventDetailPage() {
             </label>
             <div>
               <Label htmlFor="ev-start">Starts</Label>
-              <Input
-                id="ev-start"
-                type={allDay ? "date" : "datetime-local"}
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="ev-start"
+                  type={allDay ? "date" : "datetime-local"}
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
+                <Button type="button" variant="secondary" onClick={() => setStart(nowValue(allDay))}>
+                  Today
+                </Button>
+              </div>
             </div>
             <div>
               <Label htmlFor="ev-end">Ends</Label>
@@ -238,25 +254,46 @@ export function EventDetailPage() {
             {contacts && contacts.length > 0 && (
               <div className="sm:col-span-2">
                 <Label>Attendees</Label>
-                <div className="flex flex-wrap gap-2">
-                  {contacts.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => togglePick(c.id)}
-                      className={
-                        "rounded-full border px-3 py-1 text-sm transition " +
-                        (picked.includes(c.id)
-                          ? "border-primary bg-primary/15 text-foreground"
-                          : "text-muted-foreground hover:bg-accent")
-                      }
-                    >
-                      {c.display_name}
-                    </button>
-                  ))}
+                <Input
+                  className="mb-2"
+                  placeholder="Search contacts…"
+                  value={attendeeSearch}
+                  onChange={(e) => setAttendeeSearch(e.target.value)}
+                />
+                <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto">
+                  {contacts
+                    .filter(
+                      (c) =>
+                        picked.includes(c.id) ||
+                        c.display_name.toLowerCase().includes(attendeeSearch.toLowerCase()),
+                    )
+                    .map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => togglePick(c.id)}
+                        className={
+                          "rounded-full border px-3 py-1 text-sm transition " +
+                          (picked.includes(c.id)
+                            ? "border-primary bg-primary/15 text-foreground"
+                            : "text-muted-foreground hover:bg-accent")
+                        }
+                      >
+                        {c.display_name}
+                      </button>
+                    ))}
                 </div>
               </div>
             )}
+            <div className="sm:col-span-2">
+              <Label htmlFor="ev-notes">Notes (shared with everyone who can see this event)</Label>
+              <Textarea
+                id="ev-notes"
+                rows={2}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
             <div className="flex items-center gap-3 sm:col-span-2">
               <Button type="submit" disabled={busy}>
                 {busy ? "Saving…" : "Save changes"}
@@ -280,6 +317,9 @@ export function EventDetailPage() {
               <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Coins size={14} /> {event.cost_amount} {event.cost_currency}
               </div>
+            )}
+            {event.description && (
+              <div className="whitespace-pre-wrap pt-1 text-sm">{event.description}</div>
             )}
             <p className="text-xs text-muted-foreground">Shared with you — you can’t edit it.</p>
           </div>
