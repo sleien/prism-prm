@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, Plus, RefreshCw } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { Contact, SyncResult, Visibility } from "@/lib/types";
+import type { Contact, Group, SyncResult, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
 
@@ -14,10 +14,13 @@ export function ContactsPage() {
     queryFn: () => api.get<Contact[]>("/api/contacts"),
   });
 
+  const { data: groups } = useQuery({ queryKey: ["groups"], queryFn: () => api.get<Group[]>("/api/groups") });
+
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [visibility, setVisibility] = useState<Visibility>("public");
+  const [groupId, setGroupId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -31,6 +34,7 @@ export function ContactsPage() {
         display_name: name,
         emails: email ? [{ type: "home", value: email }] : [],
         visibility,
+        group_id: visibility === "group" && groupId ? Number(groupId) : null,
       });
       setName("");
       setEmail("");
@@ -117,6 +121,19 @@ export function ContactsPage() {
                 <option value="private">Private — you + partners</option>
               </Select>
             </div>
+            {visibility === "group" && (
+              <div>
+                <Label htmlFor="c-group">Group</Label>
+                <Select id="c-group" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                  <option value="">Choose a group…</option>
+                  {(groups ?? []).map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
             <div className="flex items-end gap-2">
               <Button type="submit" disabled={busy}>
                 {busy ? "Saving…" : "Save"}

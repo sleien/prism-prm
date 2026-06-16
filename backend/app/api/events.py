@@ -10,13 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.deps import get_current_user
+from app.config import settings
 from app.constants import ReminderChannel
 from app.db import get_session
 from app.integrations.nextcloud import DavError
 from app.models import Contact, Event, EventAttendee, Reminder, User
 from app.schemas.event import EventCreate, EventOut, EventUpdate, ReminderIn
 from app.services.calendar_sync import delete_event_remote, push_event
-from app.visibility import visibility_filter
+from app.services.weather import enrich_event_weather
+from app.visibility import event_visibility_filter, visibility_filter
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -47,6 +49,23 @@ async def _attendee_emails(session: AsyncSession, contact_ids: list[int]) -> lis
     return emails
 
 
+async def _add_attendees(session: AsyncSession, event_id: int, contact_ids: list[int]) -> None:
+    """Attach contacts as attendees, linking to a Prism user when a contact's
+    email matches one (so they can see "group = attended" events)."""
+    for cid in contact_ids:
+        contact = await session.get(Contact, cid)
+        user_id: int | None = None
+        for item in contact.emails if contact else []:
+            email = item.get("value")
+            if not email:
+                continue
+            match = await session.scalar(select(User).where(User.email == email.lower()))
+            if match:
+                user_id = match.id
+                break
+        session.add(EventAttendee(event_id=event_id, contact_id=cid, user_id=user_id))
+
+
 def _build_reminders(owner_id: int, event: Event, reminders_in: list[ReminderIn]) -> list[Reminder]:
     out: list[Reminder] = []
     for r in reminders_in:
@@ -62,6 +81,8 @@ def _build_reminders(owner_id: int, event: Event, reminders_in: list[ReminderIn]
 
 
 async def _sync_to_calendar(session: AsyncSession, event: Event, contact_ids: list[int]) -> None:
+    if settings.weather_enabled:
+        await enrich_event_weather(event)
     emails = await _attendee_emails(session, contact_ids)
     await push_event(event, list(event.reminders), emails)
     await session.commit()
@@ -71,7 +92,7 @@ async def _sync_to_calendar(session: AsyncSession, event: Event, contact_ids: li
 async def list_events(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[Event]:
-    filt = await visibility_filter(session, user, Event)
+    filt = await event_visibility_filter(session, user)
     rows = await session.scalars(
         select(Event).options(*_WITH_RELATIONS).where(filt).order_by(Event.starts_at)
     )
@@ -84,7 +105,7 @@ async def get_event(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> Event:
-    filt = await visibility_filter(session, user, Event)
+    filt = await event_visibility_filter(session, user)
     event = await session.scalar(
         select(Event).options(*_WITH_RELATIONS).where(Event.id == event_id, filt)
     )
@@ -105,8 +126,7 @@ async def create_event(
     await session.flush()
 
     contact_ids = await _visible_contact_ids(session, user, payload.attendee_contact_ids)
-    for cid in contact_ids:
-        session.add(EventAttendee(event_id=event.id, contact_id=cid))
+    await _add_attendees(session, event.id, contact_ids)
     for reminder in _build_reminders(user.id, event, payload.reminders):
         reminder.event_id = event.id
         session.add(reminder)
@@ -139,8 +159,8 @@ async def update_event(
         contact_ids = await _visible_contact_ids(session, user, payload.attendee_contact_ids)
         for a in list(event.attendees):
             await session.delete(a)
-        for cid in contact_ids:
-            session.add(EventAttendee(event_id=event.id, contact_id=cid))
+        await session.flush()
+        await _add_attendees(session, event.id, contact_ids)
     if payload.reminders is not None:
         for r in list(event.reminders):
             await session.delete(r)

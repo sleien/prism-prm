@@ -7,6 +7,7 @@ import { ContactDetailPage } from "@/pages/ContactDetailPage";
 import { EventsPage } from "@/pages/EventsPage";
 import { JournalPage } from "@/pages/JournalPage";
 import { SummaryPage } from "@/pages/SummaryPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 
 export function App() {
   const { me, loading } = useAuth();
@@ -33,6 +34,7 @@ export function App() {
         <Route path="/contacts/:id" element={<ContactDetailPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/journal" element={<JournalPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

@@ -12,7 +12,7 @@ from sqlalchemy import ColumnElement, and_, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import Visibility
-from app.models import GroupMembership, Partnership, User
+from app.models import Event, EventAttendee, GroupMembership, Partnership, User
 
 
 async def user_group_ids(session: AsyncSession, user: User) -> list[int]:
@@ -57,3 +57,17 @@ async def visibility_filter(session: AsyncSession, user: User, model) -> ColumnE
         )
 
     return or_(*conditions)
+
+
+async def event_visibility_filter(session: AsyncSession, user: User) -> ColumnElement[bool]:
+    """Event visibility, plus: anyone who attends an event may see it.
+
+    This realizes the "group = all that attended" tier — an attendee linked to a
+    Prism user (matched by email when the event was created) can see the event
+    regardless of its base visibility.
+    """
+    base = await visibility_filter(session, user, Event)
+    if user.is_superuser:
+        return base
+    attended = select(EventAttendee.event_id).where(EventAttendee.user_id == user.id)
+    return or_(base, Event.id.in_(attended))

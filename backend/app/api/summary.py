@@ -13,7 +13,7 @@ from app.auth.deps import get_current_user
 from app.db import get_session
 from app.models import Contact, Event, JournalEntry, JournalTemplate, User
 from app.schemas.summary import MoodPoint, SummaryOut
-from app.visibility import visibility_filter
+from app.visibility import event_visibility_filter, visibility_filter
 
 router = APIRouter(prefix="/summary", tags=["summary"])
 
@@ -29,7 +29,7 @@ async def get_summary(
         select(func.count(Contact.id)).where(contact_filter)
     )
 
-    event_filter = await visibility_filter(session, user, Event)
+    event_filter = await event_visibility_filter(session, user)
     upcoming_events = list(
         (
             await session.scalars(

@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { CalendarDays, LogOut, NotebookPen, Users } from "lucide-react";
+import { CalendarDays, LogOut, NotebookPen, SlidersHorizontal, Users } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ const nav: NavItem[] = [
   { to: "/contacts", label: "Contacts", icon: <Users size={18} /> },
   { to: "/events", label: "Events", icon: <CalendarDays size={18} /> },
   { to: "/journal", label: "Journal", icon: <NotebookPen size={18} /> },
+  { to: "/settings", label: "Settings", icon: <SlidersHorizontal size={18} /> },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

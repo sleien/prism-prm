@@ -2,7 +2,7 @@ import { type FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Coins, MapPin, Plus, Trash2, Users } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { CalEvent, Contact, Visibility } from "@/lib/types";
+import type { CalEvent, Contact, Group, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
 
@@ -30,6 +30,7 @@ export function EventsPage() {
     queryKey: ["contacts"],
     queryFn: () => api.get<Contact[]>("/api/contacts"),
   });
+  const { data: groups } = useQuery({ queryKey: ["groups"], queryFn: () => api.get<Group[]>("/api/groups") });
   const contactName = (id: number | null) =>
     contacts?.find((c) => c.id === id)?.display_name ?? "Someone";
 
@@ -41,6 +42,7 @@ export function EventsPage() {
   const [cost, setCost] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [visibility, setVisibility] = useState<Visibility>("private");
+  const [groupId, setGroupId] = useState<string>("");
   const [attendees, setAttendees] = useState<number[]>([]);
   const [reminder, setReminder] = useState(60);
   const [busy, setBusy] = useState(false);
@@ -59,6 +61,7 @@ export function EventsPage() {
         title,
         starts_at: new Date(start).toISOString(),
         visibility,
+        group_id: visibility === "group" && groupId ? Number(groupId) : null,
         attendee_contact_ids: attendees,
         reminders: reminder >= 0 ? [{ minutes_before: reminder }] : [],
       };
@@ -183,6 +186,19 @@ export function EventsPage() {
                 <option value="private">Private — you + partners</option>
               </Select>
             </div>
+            {visibility === "group" && (
+              <div>
+                <Label htmlFor="e-group">Group</Label>
+                <Select id="e-group" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                  <option value="">Choose a group…</option>
+                  {(groups ?? []).map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
             {contacts && contacts.length > 0 && (
               <div className="sm:col-span-2">
                 <Label>Attendees</Label>
@@ -264,6 +280,14 @@ export function EventsPage() {
                     <span className="flex items-center gap-1">
                       <Bell size={14} /> {ev.reminders.length} reminder
                       {ev.reminders.length > 1 ? "s" : ""}
+                    </span>
+                  )}
+                  {ev.weather && (
+                    <span className="flex items-center gap-1" title={ev.weather.description}>
+                      {ev.weather.emoji} {Math.round(Number(ev.weather.temp_max))}° /{" "}
+                      {Math.round(Number(ev.weather.temp_min))}°
+                      {ev.weather.precipitation_probability != null &&
+                        ` · ${ev.weather.precipitation_probability}% rain`}
                     </span>
                   )}
                 </div>

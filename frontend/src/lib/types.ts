@@ -16,6 +16,13 @@ export interface AuthConfig {
   oidc_display_name: string;
 }
 
+export interface Group {
+  id: number;
+  name: string;
+  description?: string | null;
+  oidc_group?: string | null;
+}
+
 export type Visibility = "public" | "group" | "private";
 
 export interface TypedValue {
@@ -122,6 +129,16 @@ export interface Summary {
   recent_entries: JournalEntry[];
 }
 
+export interface Weather {
+  date: string;
+  temp_max: number | null;
+  temp_min: number | null;
+  weather_code: number;
+  description: string;
+  emoji: string;
+  precipitation_probability: number | null;
+}
+
 // Named CalEvent to avoid clashing with the DOM's global Event type.
 export interface CalEvent {
   id: number;
@@ -140,5 +157,5 @@ export interface CalEvent {
   reminders: EventReminder[];
   nextcloud_uid?: string | null;
   last_synced_at?: string | null;
-  weather?: Record<string, unknown> | null;
+  weather?: Weather | null;
 }
