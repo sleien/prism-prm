@@ -17,8 +17,8 @@ class MoodPoint(BaseModel):
 
 class SummaryOut(BaseModel):
     contacts_count: int
-    events_upcoming: int
+    events_count: int
     journal_templates: int
     mood_trend: list[MoodPoint]
-    upcoming_events: list[EventOut]
+    recent_events: list[EventOut]
     recent_entries: list[JournalEntryOut]

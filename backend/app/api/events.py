@@ -103,8 +103,9 @@ async def list_events(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[Event]:
     filt = await event_visibility_filter(session, user)
+    # Events are a log of what happened — most recent first.
     rows = await session.scalars(
-        select(Event).options(*_WITH_RELATIONS).where(filt).order_by(Event.starts_at)
+        select(Event).options(*_WITH_RELATIONS).where(filt).order_by(Event.starts_at.desc())
     )
     return list(rows.all())
 

@@ -1,8 +1,6 @@
-"""Dashboard summary: counts, upcoming events, and mood trend."""
+"""Dashboard summary: counts, recent events, and mood trend."""
 
 from __future__ import annotations
-
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -22,28 +20,25 @@ router = APIRouter(prefix="/summary", tags=["summary"])
 async def get_summary(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> SummaryOut:
-    now = datetime.now(UTC)
-
     contact_filter = await visibility_filter(session, user, Contact)
     contacts_count = await session.scalar(
         select(func.count(Contact.id)).where(contact_filter)
     )
 
     event_filter = await event_visibility_filter(session, user)
-    upcoming_events = list(
+    # Events log what happened — show the most recent ones.
+    recent_events = list(
         (
             await session.scalars(
                 select(Event)
                 .options(selectinload(Event.attendees), selectinload(Event.reminders))
-                .where(event_filter, Event.starts_at >= now)
-                .order_by(Event.starts_at)
+                .where(event_filter)
+                .order_by(Event.starts_at.desc())
                 .limit(5)
             )
         ).all()
     )
-    events_upcoming = await session.scalar(
-        select(func.count(Event.id)).where(event_filter, Event.starts_at >= now)
-    )
+    events_count = await session.scalar(select(func.count(Event.id)).where(event_filter))
 
     journal_templates = await session.scalar(
         select(func.count(JournalTemplate.id)).where(JournalTemplate.owner_id == user.id)
@@ -72,9 +67,9 @@ async def get_summary(
 
     return SummaryOut(
         contacts_count=contacts_count or 0,
-        events_upcoming=events_upcoming or 0,
+        events_count=events_count or 0,
         journal_templates=journal_templates or 0,
         mood_trend=mood_trend,
-        upcoming_events=upcoming_events,
+        recent_events=recent_events,
         recent_entries=recent_entries,
     )

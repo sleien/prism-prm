@@ -25,6 +25,7 @@ dependencies = [
     "icalendar>=6.0",
     # Background sync + reminder dispatch
     "apscheduler>=3.10",
+    "tzlocal>=5.2",  # APScheduler's local-timezone detection needs this explicitly
 ]
 
 [project.optional-dependencies]

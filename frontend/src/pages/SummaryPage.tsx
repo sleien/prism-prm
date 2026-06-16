@@ -57,7 +57,7 @@ export function SummaryPage() {
         <>
           <div className="grid gap-3 sm:grid-cols-3">
             <Stat to="/contacts" icon={<Users size={20} />} value={data.contacts_count} label="Contacts" />
-            <Stat to="/events" icon={<CalendarDays size={20} />} value={data.events_upcoming} label="Upcoming events" />
+            <Stat to="/events" icon={<CalendarDays size={20} />} value={data.events_count} label="Events" />
             <Stat to="/journal" icon={<NotebookPen size={20} />} value={data.journal_templates} label="Journals" />
           </div>
 
@@ -70,12 +70,12 @@ export function SummaryPage() {
             </Card>
 
             <Card className="p-5">
-              <div className="mb-3 font-medium">Upcoming</div>
-              {data.upcoming_events.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nothing scheduled.</p>
+              <div className="mb-3 font-medium">Recent events</div>
+              {data.recent_events.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nothing logged yet.</p>
               ) : (
                 <ul className="space-y-2 text-sm">
-                  {data.upcoming_events.map((ev) => (
+                  {data.recent_events.map((ev) => (
                     <li key={ev.id} className="flex items-center justify-between gap-2">
                       <span>{ev.title}</span>
                       <span className="text-muted-foreground">

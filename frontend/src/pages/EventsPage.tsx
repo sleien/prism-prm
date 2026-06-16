@@ -63,7 +63,7 @@ export function EventsPage() {
   const [attendees, setAttendees] = useState<number[]>([]);
   const [attendeeSearch, setAttendeeSearch] = useState("");
   const [description, setDescription] = useState("");
-  const [reminder, setReminder] = useState(60);
+  const [reminder, setReminder] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
 
@@ -132,7 +132,7 @@ export function EventsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Events</h1>
-        <span className="text-sm text-muted-foreground">{events?.length ?? 0} upcoming</span>
+        <span className="text-sm text-muted-foreground">{events?.length ?? 0} events</span>
         <Button className="ml-auto" onClick={() => setShowForm((v) => !v)}>
           <Plus size={16} /> New event
         </Button>
@@ -304,7 +304,8 @@ export function EventsPage() {
       )}
       {events && events.length === 0 && !isLoading && (
         <Card className="p-8 text-center text-muted-foreground">
-          No events yet. Create one — it’ll appear in your Nextcloud calendar with its reminder.
+          No events yet. Log something you did with the people you track — it’s saved to your
+          Nextcloud calendar too.
         </Card>
       )}
 

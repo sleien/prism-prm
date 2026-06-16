@@ -168,10 +168,10 @@ export interface MoodPoint {
 
 export interface Summary {
   contacts_count: number;
-  events_upcoming: number;
+  events_count: number;
   journal_templates: number;
   mood_trend: MoodPoint[];
-  upcoming_events: CalEvent[];
+  recent_events: CalEvent[];
   recent_entries: JournalEntry[];
 }
 
