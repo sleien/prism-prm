@@ -77,6 +77,51 @@ export interface EventAttendee {
   status: string;
 }
 
+export interface Prompt {
+  id: string;
+  type: string; // "scale" | "text" | "number" | "boolean"
+  label: string;
+  min?: number | null;
+  max?: number | null;
+}
+
+export interface JournalTemplate {
+  id: number;
+  owner_id: number;
+  name: string;
+  cadence: "daily" | "weekly";
+  prompts: Prompt[];
+  reminder_time?: string | null;
+  visibility: Visibility;
+  active: boolean;
+}
+
+export interface JournalEntry {
+  id: number;
+  template_id: number;
+  owner_id: number;
+  contact_id?: number | null;
+  entry_date: string;
+  period_key: string;
+  data: Record<string, unknown>;
+  mood?: number | null;
+  created_at: string;
+}
+
+export interface MoodPoint {
+  entry_date: string;
+  mood: number;
+}
+
+export interface Summary {
+  contacts_count: number;
+  events_upcoming: number;
+  journal_templates: number;
+  mood_trend: MoodPoint[];
+  upcoming_events: CalEvent[];
+  recent_entries: JournalEntry[];
+}
+
 // Named CalEvent to avoid clashing with the DOM's global Event type.
 export interface CalEvent {
   id: number;

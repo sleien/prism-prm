@@ -8,12 +8,14 @@ The optional cost is carried in an X-PRISM-COST property so it round-trips.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from icalendar import Alarm, Calendar
 from icalendar import Event as IEvent
 from icalendar.prop import vRecur
+
+_WEEKDAYS = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
 
 
 def _to_utc(dt: datetime) -> datetime:
@@ -73,6 +75,41 @@ def build_event_ics(
         # is a negative offset, which is exactly what VALARM expects.
         alarm.add("trigger", reminder.remind_at - event.starts_at)
         ie.add_component(alarm)
+
+    cal.add_component(ie)
+    return cal.to_ical().decode("utf-8"), uid
+
+
+def build_journal_reminder_ics(template: Any) -> tuple[str, str]:
+    """A recurring VEVENT (daily or weekly) that nudges the user to journal.
+
+    Uses a floating local time (no timezone) so the reminder fires at the same
+    wall-clock time wherever the user's calendar is viewed. The UID is derived
+    from the template id so the event can be upserted idempotently.
+    """
+    reminder_time: time = template.reminder_time
+    cal = Calendar()
+    cal.add("prodid", "-//Prism PRM//Journal//EN")
+    cal.add("version", "2.0")
+
+    ie = IEvent()
+    uid = f"prism-journal-{template.id}"
+    ie.add("uid", uid)
+    ie.add("summary", f"Journal: {template.name}")
+    ie.add("dtstamp", datetime.now(UTC))
+    ie.add("dtstart", datetime.combine(date.today(), reminder_time))  # floating local time
+
+    freq = "WEEKLY" if str(template.cadence) == "weekly" else "DAILY"
+    rrule: dict[str, Any] = {"FREQ": [freq]}
+    if freq == "WEEKLY":
+        rrule["BYDAY"] = [_WEEKDAYS[date.today().weekday()]]
+    ie.add("rrule", rrule)
+
+    alarm = Alarm()
+    alarm.add("action", "DISPLAY")
+    alarm.add("description", f"Time to journal: {template.name}")
+    alarm.add("trigger", timedelta(0))  # at the event time
+    ie.add_component(alarm)
 
     cal.add_component(ie)
     return cal.to_ical().decode("utf-8"), uid

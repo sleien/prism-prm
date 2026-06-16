@@ -236,19 +236,25 @@ class NextcloudClient:
         )
 
     async def put_object(
-        self, href: str, data: str, content_type: str, etag: str | None = None
+        self,
+        href: str,
+        data: str,
+        content_type: str,
+        etag: str | None = None,
+        create_only: bool = True,
     ) -> str | None:
         """Create or update a resource.
 
-        - new resource: pass etag=None -> sent with If-None-Match: * (fails 412 if it exists)
         - update: pass the known etag -> sent with If-Match (fails 412 on remote change)
+        - new resource: etag=None, create_only=True -> If-None-Match: * (fails 412 if it exists)
+        - idempotent upsert: etag=None, create_only=False -> no precondition (plain overwrite)
         Returns the new ETag if the server provides one.
         """
         url = self._abs(href)
         headers = {"Content-Type": content_type}
         if etag:
             headers["If-Match"] = etag
-        else:
+        elif create_only:
             headers["If-None-Match"] = "*"
         resp = await self._client.put(url, content=data.encode(), headers=headers)
         if resp.status_code == 412:

@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { CalendarDays, LogOut, NotebookPen, Users } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,7 @@ interface NavItem {
 const nav: NavItem[] = [
   { to: "/contacts", label: "Contacts", icon: <Users size={18} /> },
   { to: "/events", label: "Events", icon: <CalendarDays size={18} /> },
-  { to: "/journal", label: "Journal", icon: <NotebookPen size={18} />, disabled: true },
+  { to: "/journal", label: "Journal", icon: <NotebookPen size={18} /> },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -24,10 +24,10 @@ export function Layout({ children }: { children: ReactNode }) {
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 border-b bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
-          <div className="flex items-center gap-2 font-semibold">
+          <Link to="/" className="flex items-center gap-2 font-semibold">
             <img src="/icon.svg" alt="" className="h-6 w-6" />
             <span>Prism</span>
-          </div>
+          </Link>
           <nav className="flex items-center gap-1">
             {nav.map((item) =>
               item.disabled ? (

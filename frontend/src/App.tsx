@@ -5,6 +5,8 @@ import { LoginPage } from "@/pages/LoginPage";
 import { ContactsPage } from "@/pages/ContactsPage";
 import { ContactDetailPage } from "@/pages/ContactDetailPage";
 import { EventsPage } from "@/pages/EventsPage";
+import { JournalPage } from "@/pages/JournalPage";
+import { SummaryPage } from "@/pages/SummaryPage";
 
 export function App() {
   const { me, loading } = useAuth();
@@ -26,11 +28,12 @@ export function App() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Navigate to="/contacts" replace />} />
+        <Route path="/" element={<SummaryPage />} />
         <Route path="/contacts" element={<ContactsPage />} />
         <Route path="/contacts/:id" element={<ContactDetailPage />} />
         <Route path="/events" element={<EventsPage />} />
-        <Route path="*" element={<Navigate to="/contacts" replace />} />
+        <Route path="/journal" element={<JournalPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
   );
