@@ -3,46 +3,62 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, Plus, RefreshCw } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { Contact, Group, SyncResult, Visibility } from "@/lib/types";
+import type { Contact, SyncResult, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
+import { useAuth } from "@/auth/AuthContext";
 
 export function ContactsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { me } = useAuth();
+  const cc = me?.phone_country_code ?? "+41";
+  const phoneFmt = me?.phone_number_format ?? "xxx xxx xx xx";
+
   const { data: contacts, isLoading, error } = useQuery({
     queryKey: ["contacts"],
     queryFn: () => api.get<Contact[]>("/api/contacts"),
   });
 
-  const { data: groups } = useQuery({ queryKey: ["groups"], queryFn: () => api.get<Group[]>("/api/groups") });
-
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [visibility, setVisibility] = useState<Visibility>("public");
-  const [groupId, setGroupId] = useState<string>("");
+  const [phone, setPhone] = useState("");
+  const [birthday, setBirthday] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [visibility, setVisibility] = useState<Visibility>("private");
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  function openForm() {
+    setPhone(`${cc} `); // prefill the country code
+    setShowForm(true);
+  }
 
   async function createContact(e: FormEvent) {
     e.preventDefault();
     setFormErr(null);
     setBusy(true);
     try {
+      const trimmedPhone = phone.trim();
       const created = await api.post<Contact>("/api/contacts", {
         display_name: name,
         emails: email ? [{ type: "home", value: email }] : [],
+        phones: trimmedPhone && trimmedPhone !== cc ? [{ type: "cell", value: trimmedPhone }] : [],
+        birthday: birthday || null,
+        organization: organization || null,
         visibility,
-        group_id: visibility === "group" && groupId ? Number(groupId) : null,
       });
       setName("");
       setEmail("");
-      setVisibility("public");
+      setPhone("");
+      setBirthday("");
+      setOrganization("");
+      setVisibility("private");
       setShowForm(false);
       await qc.invalidateQueries({ queryKey: ["contacts"] });
-      navigate(`/contacts/${created.id}`); // open the detail page to add more
+      navigate(`/contacts/${created.id}`); // open detail to add more (addresses, etc.)
     } catch (err) {
       setFormErr(err instanceof ApiError ? err.message : "Could not create contact");
     } finally {
@@ -78,7 +94,7 @@ export function ContactsPage() {
           <Button variant="secondary" onClick={() => void syncNow()} disabled={busy}>
             <RefreshCw size={16} className={busy ? "animate-spin" : ""} /> Sync now
           </Button>
-          <Button onClick={() => setShowForm((v) => !v)}>
+          <Button onClick={() => (showForm ? setShowForm(false) : openForm())}>
             <Plus size={16} /> New contact
           </Button>
         </div>
@@ -91,7 +107,7 @@ export function ContactsPage() {
       {showForm && (
         <Card className="p-4">
           <form onSubmit={createContact} className="grid gap-3 sm:grid-cols-2">
-            <div>
+            <div className="sm:col-span-2">
               <Label htmlFor="c-name">Name</Label>
               <Input
                 id="c-name"
@@ -112,30 +128,33 @@ export function ContactsPage() {
               />
             </div>
             <div>
+              <Label htmlFor="c-phone">Phone</Label>
+              <Input
+                id="c-phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder={`${cc} ${phoneFmt}`}
+              />
+            </div>
+            <div>
+              <Label htmlFor="c-bday">Birthday</Label>
+              <Input id="c-bday" type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="c-org">Organization</Label>
+              <Input id="c-org" value={organization} onChange={(e) => setOrganization(e.target.value)} />
+            </div>
+            <div>
               <Label htmlFor="c-vis">Visibility</Label>
               <Select
                 id="c-vis"
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value as Visibility)}
               >
-                <option value="public">Public — all users</option>
-                <option value="group">Group — a circle</option>
                 <option value="private">Private — you + partners</option>
+                <option value="public">Public — all users</option>
               </Select>
             </div>
-            {visibility === "group" && (
-              <div>
-                <Label htmlFor="c-group">Group</Label>
-                <Select id="c-group" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-                  <option value="">Choose a group…</option>
-                  {(groups ?? []).map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
             <div className="flex items-end gap-2">
               <Button type="submit" disabled={busy}>
                 {busy ? "Saving…" : "Save"}

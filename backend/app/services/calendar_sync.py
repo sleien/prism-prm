@@ -1,8 +1,8 @@
-"""Push Prism events to the Nextcloud calendar as VEVENT + VALARM.
+"""Push Prism events to the owner's Nextcloud calendar as VEVENT + VALARM.
 
-Events are owned by Prism (one-way push to Nextcloud, unlike contacts which are
-Nextcloud-canonical). Push is best-effort: an event is always saved locally; if
-Nextcloud is down the event simply shows as not-yet-synced and can be re-pushed.
+Events are owned by Prism (one-way push). Push is best-effort: an event is
+always saved locally; if Nextcloud is unavailable it simply shows as not-synced.
+Each event is pushed to its owner's Nextcloud account.
 """
 
 from __future__ import annotations
@@ -12,27 +12,27 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
-from app.config import settings
 from app.integrations.ical import build_event_ics
-from app.integrations.nextcloud import ICAL_CONTENT_TYPE, DavError, NextcloudClient
+from app.integrations.nextcloud import ICAL_CONTENT_TYPE, DavError
+from app.services.nextcloud_accounts import client_for_user
 
 log = logging.getLogger("prism.calendar")
 
 
 async def push_event(
-    event: Any, reminders: list[Any], attendee_emails: list[str]
+    owner: Any, event: Any, reminders: list[Any], attendee_emails: list[str]
 ) -> tuple[bool, str | None]:
-    """Push (create or update) an event to the Nextcloud calendar.
+    """Push (create or update) an event to the owner's Nextcloud calendar.
 
-    Mutates the event's nextcloud_uid/href/etag/last_synced_at. The caller
-    commits. Returns (ok, error_message).
+    Mutates the event's nextcloud_uid/href/etag/last_synced_at. The caller commits.
     """
     ics, uid = build_event_ics(event, reminders, attendee_emails)
     event.nextcloud_uid = uid
-    if not settings.nextcloud_configured:
+    nc = client_for_user(owner)
+    if nc is None:
         return False, "Nextcloud not configured"
     try:
-        async with NextcloudClient.from_settings() as nc:
+        async with nc:
             cal_url = await nc.calendar_url()
             if event.nextcloud_href:
                 etag = await nc.put_object(
@@ -50,8 +50,12 @@ async def push_event(
         return False, str(exc)
 
 
-async def delete_event_remote(event: Any) -> None:
-    """Remove an event's VEVENT from the Nextcloud calendar (best-effort)."""
-    if event.nextcloud_href and settings.nextcloud_configured:
-        async with NextcloudClient.from_settings() as nc:
-            await nc.delete_object(event.nextcloud_href, etag=event.etag)
+async def delete_event_remote(owner: Any, event: Any) -> None:
+    """Remove an event's VEVENT from the owner's Nextcloud calendar (best-effort)."""
+    if not event.nextcloud_href:
+        return
+    nc = client_for_user(owner)
+    if nc is None:
+        return
+    async with nc:
+        await nc.delete_object(event.nextcloud_href, etag=event.etag)

@@ -14,13 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import get_current_user, require_admin
-from app.config import settings
+from app.auth.deps import get_current_user
 from app.db import get_session
-from app.integrations.nextcloud import DavError, NextcloudClient
+from app.integrations.nextcloud import DavError
 from app.models import Contact, User
 from app.schemas.contact import ContactCreate, ContactOut, ContactUpdate
 from app.services.geocode import geocode_contact
+from app.services.nextcloud_accounts import client_for_user
 from app.services.sync import SyncResult, sync_contacts
 from app.visibility import validate_group_choice, visibility_filter
 
@@ -38,6 +38,11 @@ async def _owned(session: AsyncSession, user: User, contact_id: int) -> Contact:
     if contact.owner_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your contact")
     return contact
+
+
+async def _validate_linked_user(session: AsyncSession, linked_user_id: int | None) -> None:
+    if linked_user_id is not None and await session.get(User, linked_user_id) is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Linked user not found")
 
 
 @router.get("", response_model=list[ContactOut])
@@ -69,6 +74,7 @@ async def create_contact(
     session: AsyncSession = Depends(get_session),
 ) -> Contact:
     await validate_group_choice(session, user, payload.visibility, payload.group_id)
+    await _validate_linked_user(session, payload.linked_user_id)
     data = payload.model_dump()
     data["emails"] = _to_dicts(payload.emails)
     data["phones"] = _to_dicts(payload.phones)
@@ -101,6 +107,7 @@ async def update_contact(
     for key, value in updates.items():
         setattr(contact, key, value)
     await validate_group_choice(session, user, contact.visibility, contact.group_id)
+    await _validate_linked_user(session, contact.linked_user_id)
     if "addresses" in updates:
         await geocode_contact(contact)
     contact.dirty = True
@@ -116,10 +123,11 @@ async def delete_contact(
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     contact = await _owned(session, user, contact_id)
-    # Remove from Nextcloud first so the next sync does not resurrect it.
-    if contact.nextcloud_href and settings.nextcloud_configured:
+    # Remove from the owner's Nextcloud first so the next sync does not resurrect it.
+    nc = client_for_user(user)
+    if contact.nextcloud_href and nc is not None:
         try:
-            async with NextcloudClient.from_settings() as nc:
+            async with nc:
                 await nc.delete_object(contact.nextcloud_href, etag=contact.etag)
         except DavError as exc:
             raise HTTPException(
@@ -132,7 +140,7 @@ async def delete_contact(
 
 @router.post("/sync", response_model=SyncResult)
 async def trigger_sync(
-    user: User = Depends(require_admin), session: AsyncSession = Depends(get_session)
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> SyncResult:
-    """Run a contact sync now. Instance-wide, so restricted to admins."""
-    return await sync_contacts(session)
+    """Sync the current user's own contacts with their Nextcloud now."""
+    return await sync_contacts(session, user)

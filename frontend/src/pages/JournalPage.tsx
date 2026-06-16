@@ -38,6 +38,7 @@ export function JournalPage() {
     { id: "mood", type: "scale", label: "Mood", min: 1, max: 10 },
   ]);
   const [createErr, setCreateErr] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   function addPrompt() {
     setPrompts((p) => [...p, { id: `p${p.length}`, type: "text", label: "" }]);
@@ -49,7 +50,32 @@ export function JournalPage() {
     setPrompts((p) => p.filter((_, idx) => idx !== i));
   }
 
-  async function createTemplate(e: FormEvent) {
+  function resetForm() {
+    setShowCreate(false);
+    setEditingId(null);
+    setName("");
+    setCadence("daily");
+    setReminderTime("");
+    setPrompts([{ id: "mood", type: "scale", label: "Mood", min: 1, max: 10 }]);
+    setCreateErr(null);
+  }
+  function newJournal() {
+    resetForm();
+    setShowCreate(true);
+  }
+  function startEdit(t: JournalTemplate) {
+    setEditingId(t.id);
+    setName(t.name);
+    setCadence(t.cadence);
+    setReminderTime(t.reminder_time ? t.reminder_time.slice(0, 5) : "");
+    setPrompts(
+      t.prompts.length ? t.prompts : [{ id: "mood", type: "scale", label: "Mood", min: 1, max: 10 }],
+    );
+    setCreateErr(null);
+    setShowCreate(true);
+  }
+
+  async function saveTemplate(e: FormEvent) {
     e.preventDefault();
     setCreateErr(null);
     try {
@@ -57,18 +83,20 @@ export function JournalPage() {
         name,
         cadence,
         prompts: prompts.map((p, i) => ({ ...p, id: slug(p.label, `prompt_${i}`) })),
+        reminder_time: reminderTime || null,
       };
-      if (reminderTime) body.reminder_time = reminderTime;
-      const created = await api.post<JournalTemplate>("/api/journal/templates", body);
-      setShowCreate(false);
-      setName("");
-      setReminderTime("");
-      setPrompts([{ id: "mood", type: "scale", label: "Mood", min: 1, max: 10 }]);
+      let savedId = editingId;
+      if (editingId) {
+        await api.patch<JournalTemplate>(`/api/journal/templates/${editingId}`, body);
+      } else {
+        savedId = (await api.post<JournalTemplate>("/api/journal/templates", body)).id;
+      }
+      resetForm();
       await qc.invalidateQueries({ queryKey: ["journal-templates"] });
       await qc.invalidateQueries({ queryKey: ["summary"] });
-      setSelectedId(created.id);
+      if (savedId) setSelectedId(savedId);
     } catch (err) {
-      setCreateErr(err instanceof ApiError ? err.message : "Could not create journal");
+      setCreateErr(err instanceof ApiError ? err.message : "Could not save journal");
     }
   }
 
@@ -76,14 +104,21 @@ export function JournalPage() {
     <div className="space-y-5">
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-semibold">Journal</h1>
-        <Button className="ml-auto" onClick={() => setShowCreate((v) => !v)}>
-          <Plus size={16} /> New journal
-        </Button>
+        <div className="ml-auto flex gap-2">
+          {selected && (
+            <Button variant="secondary" onClick={() => startEdit(selected)}>
+              Edit
+            </Button>
+          )}
+          <Button onClick={newJournal}>
+            <Plus size={16} /> New journal
+          </Button>
+        </div>
       </div>
 
       {showCreate && (
         <Card className="p-4">
-          <form onSubmit={createTemplate} className="space-y-3">
+          <form onSubmit={saveTemplate} className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="sm:col-span-1">
                 <Label htmlFor="j-name">Name</Label>
@@ -152,8 +187,8 @@ export function JournalPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button type="submit">Create journal</Button>
-              <Button type="button" variant="ghost" onClick={() => setShowCreate(false)}>
+              <Button type="submit">{editingId ? "Save changes" : "Create journal"}</Button>
+              <Button type="button" variant="ghost" onClick={resetForm}>
                 Cancel
               </Button>
               {createErr && <span className="text-sm text-destructive">{createErr}</span>}

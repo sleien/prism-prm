@@ -1,17 +1,15 @@
-"""Contact sync between Prism and Nextcloud.
+"""Contact sync between Prism and a user's Nextcloud.
 
-Nextcloud is the source of truth. The engine:
-  1. pushes locally-changed ("dirty") contacts up (create or If-Match update),
+Nextcloud is the source of truth. Per user, the engine:
+  1. pushes that user's locally-changed ("dirty") contacts up (create / If-Match),
   2. pulls new/changed remote contacts down (ETag comparison),
   3. removes local mirrors whose remote vCard has disappeared.
 
 On a write conflict (HTTP 412) the local edit is left dirty and the remote copy
-wins on the next pull, which keeps Nextcloud authoritative without losing data
-(the attempted edit remains visible locally until reconciled).
+wins on the next pull, keeping Nextcloud authoritative without losing data.
 
-For the initial release a single instance-level Nextcloud address book backs the
-whole app; synced contacts are owned by the first admin and default to PUBLIC
-visibility. Per-user account linking is a planned enhancement.
+Each user syncs their own Nextcloud account (or the instance-level fallback);
+synced contacts are owned by that user and default to PRIVATE visibility.
 """
 
 from __future__ import annotations
@@ -28,6 +26,7 @@ from app.constants import Visibility
 from app.integrations.nextcloud import VCARD_CONTENT_TYPE, DavError, NextcloudClient
 from app.integrations.vcard import build_vcard, parse_vcard
 from app.models import Contact, User
+from app.services.nextcloud_accounts import client_for_user
 
 log = logging.getLogger("prism.sync")
 
@@ -56,16 +55,6 @@ class SyncResult:
     errors: list[str] = field(default_factory=list)
 
 
-async def _sync_owner(session: AsyncSession) -> User | None:
-    """The user that owns instance-synced contacts: lowest-id admin, else lowest-id user."""
-    user = await session.scalar(
-        select(User).where(User.is_superuser.is_(True)).order_by(User.id).limit(1)
-    )
-    if user is None:
-        user = await session.scalar(select(User).order_by(User.id).limit(1))
-    return user
-
-
 def _apply_fields(contact: Contact, fields: dict) -> None:
     for key in _PARSED_FIELDS:
         if key in fields and fields[key] is not None:
@@ -75,9 +64,13 @@ def _apply_fields(contact: Contact, fields: dict) -> None:
 
 
 async def _push_dirty(
-    session: AsyncSession, nc: NextcloudClient, ab_url: str, result: SyncResult
+    session: AsyncSession, nc: NextcloudClient, ab_url: str, owner_id: int, result: SyncResult
 ) -> None:
-    dirty = (await session.scalars(select(Contact).where(Contact.dirty.is_(True)))).all()
+    dirty = (
+        await session.scalars(
+            select(Contact).where(Contact.dirty.is_(True), Contact.owner_id == owner_id)
+        )
+    ).all()
     ab_path = urlparse(ab_url).path
     for contact in dirty:
         try:
@@ -106,26 +99,25 @@ async def _push_dirty(
     await session.flush()
 
 
-async def sync_contacts(session: AsyncSession) -> SyncResult:
-    """Run a full two-way contact sync. Safe to call when Nextcloud is unset."""
-    from app.config import settings
-
+async def sync_contacts(session: AsyncSession, user: User) -> SyncResult:
+    """Two-way sync of one user's contacts with their Nextcloud address book."""
     result = SyncResult()
-    if not settings.nextcloud_configured:
+    nc = client_for_user(user)
+    if nc is None:
         result.skipped_reason = "Nextcloud not configured"
         return result
-    owner = await _sync_owner(session)
-    if owner is None:
-        result.skipped_reason = "no users yet"
-        return result
 
-    async with NextcloudClient.from_settings() as nc:
+    async with nc:
         ab_url = await nc.addressbook_url()
-        await _push_dirty(session, nc, ab_url, result)
+        await _push_dirty(session, nc, ab_url, user.id, result)
 
         remote = {obj.href: obj for obj in await nc.list_objects(ab_url)}
         local = (
-            await session.scalars(select(Contact).where(Contact.nextcloud_href.is_not(None)))
+            await session.scalars(
+                select(Contact).where(
+                    Contact.owner_id == user.id, Contact.nextcloud_href.is_not(None)
+                )
+            )
         ).all()
         local_by_href = {c.nextcloud_href: c for c in local}
 
@@ -142,8 +134,8 @@ async def sync_contacts(session: AsyncSession) -> SyncResult:
             fields = parse_vcard(full.data or "")
             if existing is None:
                 contact = Contact(
-                    owner_id=owner.id,
-                    visibility=Visibility.PUBLIC,
+                    owner_id=user.id,
+                    visibility=Visibility.PRIVATE,
                     nextcloud_href=href,
                 )
                 session.add(contact)
@@ -165,7 +157,8 @@ async def sync_contacts(session: AsyncSession) -> SyncResult:
 
     await session.commit()
     log.info(
-        "Contact sync: +%d ~%d -%d pushed=%d conflicts=%d",
+        "Contact sync (user %d): +%d ~%d -%d pushed=%d conflicts=%d",
+        user.id,
         result.created,
         result.updated,
         result.deleted,

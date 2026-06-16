@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class RegisterIn(BaseModel):
@@ -31,10 +31,35 @@ class MeOut(BaseModel):
     user: UserOut
     groups: list[str] = []
     self_contact_id: int | None = None
+    default_currency: str = "CHF"
+    phone_country_code: str = "+41"
+    phone_number_format: str = "xxx xxx xx xx"
+    # Whether this user has a usable Nextcloud (personal creds or instance fallback).
+    nextcloud_configured: bool = False
+    # Personal Nextcloud config (password never returned).
+    nextcloud_url: str | None = None
+    nextcloud_username: str | None = None
+    nextcloud_addressbook: str | None = None
+    nextcloud_calendar: str | None = None
 
 
 class SelfContactIn(BaseModel):
     contact_id: int | None = None
+
+
+class PreferencesIn(BaseModel):
+    default_currency: str | None = Field(default=None, max_length=3)
+    phone_country_code: str | None = Field(default=None, max_length=8)
+    phone_number_format: str | None = Field(default=None, max_length=40)
+
+
+class NextcloudSettingsIn(BaseModel):
+    nextcloud_url: str | None = Field(default=None, max_length=500)
+    nextcloud_username: str | None = Field(default=None, max_length=200)
+    # Send to set/replace; omit/null to leave unchanged; empty string to clear.
+    nextcloud_app_password: str | None = None
+    nextcloud_addressbook: str | None = Field(default=None, max_length=200)
+    nextcloud_calendar: str | None = Field(default=None, max_length=200)
 
 
 class AuthConfigOut(BaseModel):

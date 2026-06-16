@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import ReminderChannel, Visibility
@@ -106,3 +106,15 @@ class Reminder(Base, TimestampMixin):
     done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     event: Mapped[Event | None] = relationship(back_populates="reminders")
+
+
+class EventNote(Base, TimestampMixin):
+    """A private note on an event, visible only to its author. One per user/event."""
+
+    __tablename__ = "event_note"
+    __table_args__ = (UniqueConstraint("event_id", "user_id", name="uq_event_note"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("event.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    content: Mapped[str] = mapped_column(Text, default="", nullable=False)

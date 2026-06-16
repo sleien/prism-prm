@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.cookies import clear_auth_cookies, set_auth_cookies
+from app.auth.crypto import encrypt
 from app.auth.deps import get_current_user
 from app.auth.security import (
     REFRESH_TOKEN_COOKIE,
@@ -27,10 +28,13 @@ from app.schemas.auth import (
     AuthConfigOut,
     LoginIn,
     MeOut,
+    NextcloudSettingsIn,
+    PreferencesIn,
     RegisterIn,
     SelfContactIn,
     UserOut,
 )
+from app.services.nextcloud_accounts import user_has_nextcloud
 from app.visibility import visibility_filter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -55,6 +59,14 @@ async def build_me(session: AsyncSession, user: User) -> MeOut:
         user=UserOut.model_validate(user),
         groups=await _group_names(session, user),
         self_contact_id=user.self_contact_id,
+        default_currency=user.default_currency,
+        phone_country_code=user.phone_country_code,
+        phone_number_format=user.phone_number_format,
+        nextcloud_configured=user_has_nextcloud(user),
+        nextcloud_url=user.nextcloud_url,
+        nextcloud_username=user.nextcloud_username,
+        nextcloud_addressbook=user.nextcloud_addressbook,
+        nextcloud_calendar=user.nextcloud_calendar,
     )
 
 
@@ -175,6 +187,47 @@ async def set_self_contact(
         if visible is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Contact not found")
     user.self_contact_id = payload.contact_id
+    await session.commit()
+    await session.refresh(user)
+    return await build_me(session, user)
+
+
+@router.put("/preferences", response_model=MeOut)
+async def set_preferences(
+    payload: PreferencesIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> MeOut:
+    if payload.default_currency is not None:
+        user.default_currency = payload.default_currency.upper() or "CHF"
+    if payload.phone_country_code is not None:
+        user.phone_country_code = payload.phone_country_code
+    if payload.phone_number_format is not None:
+        user.phone_number_format = payload.phone_number_format
+    await session.commit()
+    await session.refresh(user)
+    return await build_me(session, user)
+
+
+@router.put("/nextcloud", response_model=MeOut)
+async def set_nextcloud(
+    payload: NextcloudSettingsIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> MeOut:
+    """Set the current user's personal Nextcloud account. The app password is
+    encrypted at rest; send an empty string to clear it."""
+    if payload.nextcloud_url is not None:
+        user.nextcloud_url = payload.nextcloud_url.strip() or None
+    if payload.nextcloud_username is not None:
+        user.nextcloud_username = payload.nextcloud_username.strip() or None
+    if payload.nextcloud_app_password is not None:
+        pw = payload.nextcloud_app_password.strip()
+        user.nextcloud_app_password_enc = encrypt(pw) if pw else None
+    if payload.nextcloud_addressbook is not None:
+        user.nextcloud_addressbook = payload.nextcloud_addressbook.strip() or None
+    if payload.nextcloud_calendar is not None:
+        user.nextcloud_calendar = payload.nextcloud_calendar.strip() or None
     await session.commit()
     await session.refresh(user)
     return await build_me(session, user)

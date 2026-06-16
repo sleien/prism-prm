@@ -53,8 +53,17 @@ class DavObject:
 class NextcloudClient:
     """Thin async DAV client. Use as an async context manager."""
 
-    def __init__(self, base_url: str, username: str, password: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        username: str,
+        password: str,
+        addressbook: str | None = None,
+        calendar: str | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
+        self.addressbook_name = addressbook or settings.nextcloud_addressbook
+        self.calendar_name = calendar or settings.nextcloud_calendar
         origin = urlparse(self.base_url)
         self.origin = f"{origin.scheme}://{origin.netloc}"
         self._client = httpx.AsyncClient(
@@ -281,7 +290,7 @@ class NextcloudClient:
     # -- convenience --------------------------------------------------------
 
     async def addressbook_url(self) -> str:
-        return await self.discover_collection("carddav", settings.nextcloud_addressbook)
+        return await self.discover_collection("carddav", self.addressbook_name)
 
     async def calendar_url(self) -> str:
-        return await self.discover_collection("caldav", settings.nextcloud_calendar)
+        return await self.discover_collection("caldav", self.calendar_name)

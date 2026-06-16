@@ -33,6 +33,25 @@ class User(Base, TimestampMixin):
     # at the app layer.
     self_contact_id: Mapped[int | None] = mapped_column(nullable=True)
 
+    # Per-user preferences (defaults tuned for Switzerland).
+    default_currency: Mapped[str] = mapped_column(
+        String(3), default="CHF", server_default="CHF", nullable=False
+    )
+    phone_country_code: Mapped[str] = mapped_column(
+        String(8), default="+41", server_default="+41", nullable=False
+    )
+    phone_number_format: Mapped[str] = mapped_column(
+        String(40), default="xxx xxx xx xx", server_default="xxx xxx xx xx", nullable=False
+    )
+
+    # Per-user Nextcloud account. The app password is stored encrypted. When
+    # unset, the instance-level NEXTCLOUD_* env settings act as a fallback.
+    nextcloud_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    nextcloud_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    nextcloud_app_password_enc: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    nextcloud_addressbook: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    nextcloud_calendar: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
 
 class Group(Base, TimestampMixin):
     """A named circle of users. Optionally mapped to an Authentik group so that

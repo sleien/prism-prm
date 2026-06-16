@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -11,12 +12,22 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.deps import get_current_user
 from app.config import settings
-from app.constants import ReminderChannel
+from app.constants import ReminderChannel, Visibility
 from app.db import get_session
 from app.integrations.nextcloud import DavError
-from app.models import Contact, Event, EventAttendee, Reminder, User
-from app.schemas.event import EventCreate, EventOut, EventUpdate, ReminderIn
+from app.models import Contact, Event, EventAttendee, EventNote, Reminder, User
+from app.schemas.contact import ContactOut
+from app.schemas.event import (
+    AttendeeDetailOut,
+    EventCreate,
+    EventNoteIn,
+    EventNoteOut,
+    EventOut,
+    EventUpdate,
+    ReminderIn,
+)
 from app.services.calendar_sync import delete_event_remote, push_event
+from app.services.geocode import geocode_contact
 from app.services.weather import enrich_event_weather
 from app.visibility import event_visibility_filter, validate_group_choice, visibility_filter
 
@@ -50,20 +61,17 @@ async def _attendee_emails(session: AsyncSession, contact_ids: list[int]) -> lis
 
 
 async def _add_attendees(session: AsyncSession, event_id: int, contact_ids: list[int]) -> None:
-    """Attach contacts as attendees, linking to a Prism user when a contact's
-    email matches one (so they can see "group = attended" events)."""
+    """Attach contacts as attendees. If a contact is explicitly linked to a Prism
+    user, that user is recorded so they can see the event (cross-user sharing)."""
     for cid in contact_ids:
         contact = await session.get(Contact, cid)
-        user_id: int | None = None
-        for item in contact.emails if contact else []:
-            email = item.get("value")
-            if not email:
-                continue
-            match = await session.scalar(select(User).where(User.email == email.lower()))
-            if match:
-                user_id = match.id
-                break
-        session.add(EventAttendee(event_id=event_id, contact_id=cid, user_id=user_id))
+        session.add(
+            EventAttendee(
+                event_id=event_id,
+                contact_id=cid,
+                user_id=(contact.linked_user_id if contact else None),
+            )
+        )
 
 
 def _build_reminders(owner_id: int, event: Event, reminders_in: list[ReminderIn]) -> list[Reminder]:
@@ -80,11 +88,13 @@ def _build_reminders(owner_id: int, event: Event, reminders_in: list[ReminderIn]
     return out
 
 
-async def _sync_to_calendar(session: AsyncSession, event: Event, contact_ids: list[int]) -> None:
+async def _sync_to_calendar(
+    session: AsyncSession, owner: User, event: Event, contact_ids: list[int]
+) -> None:
     if settings.weather_enabled:
         await enrich_event_weather(event)
     emails = await _attendee_emails(session, contact_ids)
-    await push_event(event, list(event.reminders), emails)
+    await push_event(owner, event, list(event.reminders), emails)
     await session.commit()
 
 
@@ -136,7 +146,7 @@ async def create_event(
 
     await session.commit()
     event = await _load(session, event.id)  # type: ignore[assignment]
-    await _sync_to_calendar(session, event, contact_ids)
+    await _sync_to_calendar(session, user, event, contact_ids)
     return await _load(session, event.id)  # type: ignore[return-value]
 
 
@@ -179,7 +189,7 @@ async def update_event(
     event = await _load(session, event_id)  # type: ignore[assignment]
     if contact_ids is None:
         contact_ids = [a.contact_id for a in event.attendees if a.contact_id]
-    await _sync_to_calendar(session, event, contact_ids)
+    await _sync_to_calendar(session, user, event, contact_ids)
     return await _load(session, event_id)  # type: ignore[return-value]
 
 
@@ -195,7 +205,7 @@ async def delete_event(
     if event.owner_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your event")
     try:
-        await delete_event_remote(event)
+        await delete_event_remote(user, event)
     except DavError as exc:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, f"Could not delete from Nextcloud: {exc}"
@@ -203,3 +213,137 @@ async def delete_event(
     await session.delete(event)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- per-user private notes -------------------------------------------------
+
+
+async def _ensure_event_visible(session: AsyncSession, user: User, event_id: int) -> None:
+    filt = await event_visibility_filter(session, user)
+    if await session.scalar(select(Event.id).where(Event.id == event_id, filt)) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
+
+
+@router.get("/{event_id}/note", response_model=EventNoteOut)
+async def get_note(
+    event_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> EventNoteOut:
+    await _ensure_event_visible(session, user, event_id)
+    note = await session.scalar(
+        select(EventNote).where(EventNote.event_id == event_id, EventNote.user_id == user.id)
+    )
+    return EventNoteOut(content=note.content if note else "")
+
+
+@router.put("/{event_id}/note", response_model=EventNoteOut)
+async def put_note(
+    event_id: int,
+    payload: EventNoteIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> EventNoteOut:
+    await _ensure_event_visible(session, user, event_id)
+    note = await session.scalar(
+        select(EventNote).where(EventNote.event_id == event_id, EventNote.user_id == user.id)
+    )
+    if note is None:
+        note = EventNote(event_id=event_id, user_id=user.id, content=payload.content)
+        session.add(note)
+    else:
+        note.content = payload.content
+    await session.commit()
+    return EventNoteOut(content=payload.content)
+
+
+# --- attendees with detail + cross-user import ------------------------------
+
+
+async def _viewer_owns_similar(session: AsyncSession, user: User, src: Contact) -> bool:
+    """Does the viewer already have this contact (same UID or a shared email)?"""
+    if src.nextcloud_uid:
+        hit = await session.scalar(
+            select(Contact.id).where(
+                Contact.owner_id == user.id, Contact.nextcloud_uid == src.nextcloud_uid
+            )
+        )
+        if hit:
+            return True
+    emails = {e.get("value", "").lower() for e in (src.emails or []) if e.get("value")}
+    if not emails:
+        return False
+    mine = await session.scalars(select(Contact).where(Contact.owner_id == user.id))
+    for c in mine.all():
+        for e in c.emails or []:
+            if e.get("value", "").lower() in emails:
+                return True
+    return False
+
+
+@router.get("/{event_id}/attendees", response_model=list[AttendeeDetailOut])
+async def event_attendees(
+    event_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AttendeeDetailOut]:
+    await _ensure_event_visible(session, user, event_id)
+    attendees = (
+        await session.scalars(select(EventAttendee).where(EventAttendee.event_id == event_id))
+    ).all()
+    out: list[AttendeeDetailOut] = []
+    for att in attendees:
+        contact = await session.get(Contact, att.contact_id) if att.contact_id else None
+        mine = bool(contact) and (
+            contact.owner_id == user.id or await _viewer_owns_similar(session, user, contact)
+        )
+        out.append(
+            AttendeeDetailOut(
+                attendee_id=att.id,
+                contact_id=att.contact_id,
+                name=(contact.display_name if contact else "Someone"),
+                emails=(contact.emails if contact else []),
+                phones=(contact.phones if contact else []),
+                status=att.status,
+                mine=mine,
+            )
+        )
+    return out
+
+
+@router.post("/{event_id}/attendees/{attendee_id}/import", response_model=ContactOut)
+async def import_attendee_contact(
+    event_id: int,
+    attendee_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Contact:
+    """Copy an event attendee's contact into the current user's own contacts."""
+    await _ensure_event_visible(session, user, event_id)
+    att = await session.get(EventAttendee, attendee_id)
+    if att is None or att.event_id != event_id or att.contact_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Attendee not found")
+    src = await session.get(Contact, att.contact_id)
+    if src is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contact not found")
+    contact = Contact(
+        owner_id=user.id,
+        visibility=Visibility.PRIVATE,
+        dirty=True,
+        nextcloud_uid=str(uuid.uuid4()),
+        display_name=src.display_name,
+        first_name=src.first_name,
+        last_name=src.last_name,
+        organization=src.organization,
+        job_title=src.job_title,
+        birthday=src.birthday,
+        notes=src.notes,
+        emails=list(src.emails or []),
+        phones=list(src.phones or []),
+        addresses=list(src.addresses or []),
+    )
+    session.add(contact)
+    await geocode_contact(contact)
+    await session.commit()
+    await session.refresh(contact)
+    return contact

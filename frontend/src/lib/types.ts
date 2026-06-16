@@ -9,6 +9,14 @@ export interface Me {
   user: UserOut;
   groups: string[];
   self_contact_id?: number | null;
+  default_currency: string;
+  phone_country_code: string;
+  phone_number_format: string;
+  nextcloud_configured: boolean;
+  nextcloud_url?: string | null;
+  nextcloud_username?: string | null;
+  nextcloud_addressbook?: string | null;
+  nextcloud_calendar?: string | null;
 }
 
 export interface AuthConfig {
@@ -55,6 +63,7 @@ export interface Contact {
   addresses: AddressItem[];
   visibility: Visibility;
   group_id?: number | null;
+  linked_user_id?: number | null;
   latitude?: number | null;
   longitude?: number | null;
   nextcloud_uid?: string | null;
@@ -158,6 +167,16 @@ export interface Summary {
   mood_trend: MoodPoint[];
   upcoming_events: CalEvent[];
   recent_entries: JournalEntry[];
+}
+
+export interface AttendeeDetail {
+  attendee_id: number;
+  contact_id: number | null;
+  name: string;
+  emails: TypedValue[];
+  phones: TypedValue[];
+  status: string;
+  mine: boolean;
 }
 
 export interface Weather {

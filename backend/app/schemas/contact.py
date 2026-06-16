@@ -36,6 +36,7 @@ class ContactBase(BaseModel):
     addresses: list[AddressItem] = Field(default_factory=list)
     visibility: Visibility = Visibility.PUBLIC
     group_id: int | None = None
+    linked_user_id: int | None = None
 
 
 class ContactCreate(ContactBase):
@@ -55,6 +56,7 @@ class ContactUpdate(BaseModel):
     addresses: list[AddressItem] | None = None
     visibility: Visibility | None = None
     group_id: int | None = None
+    linked_user_id: int | None = None
 
 
 class ContactOut(ContactBase):

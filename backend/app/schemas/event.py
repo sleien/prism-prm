@@ -8,6 +8,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.constants import Visibility
+from app.schemas.contact import TypedValue
 
 
 class ReminderIn(BaseModel):
@@ -88,3 +89,23 @@ class EventOut(EventBase):
     nextcloud_uid: str | None = None
     last_synced_at: datetime | None = None
     weather: dict | None = None
+
+
+class EventNoteIn(BaseModel):
+    content: str = ""
+
+
+class EventNoteOut(BaseModel):
+    content: str
+
+
+class AttendeeDetailOut(BaseModel):
+    """An event attendee with enough contact detail to view and import them."""
+
+    attendee_id: int
+    contact_id: int | None = None
+    name: str
+    emails: list[TypedValue] = Field(default_factory=list)
+    phones: list[TypedValue] = Field(default_factory=list)
+    status: str
+    mine: bool  # whether the viewer already owns this contact

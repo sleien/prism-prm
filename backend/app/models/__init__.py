@@ -7,7 +7,7 @@ from app.models.enrichment import (
     LifeEventType,
     RelationshipType,
 )
-from app.models.event import Event, EventAttendee, Reminder
+from app.models.event import Event, EventAttendee, EventNote, Reminder
 from app.models.journal import JournalEntry, JournalTemplate
 from app.models.user import ApiToken, Group, GroupMembership, Partnership, User
 
@@ -18,6 +18,7 @@ __all__ = [
     "ContactRelationship",
     "Event",
     "EventAttendee",
+    "EventNote",
     "Group",
     "GroupMembership",
     "JournalEntry",

@@ -16,6 +16,10 @@ async def _login(client, email):
     assert r.status_code == 200, r.text
 
 
+async def _uid(client) -> int:
+    return (await client.get("/api/auth/me")).json()["user"]["id"]
+
+
 @pytest.mark.asyncio
 async def test_bearer_token_auth_works(client):
     """C1: a personal API token authenticates (previously 500'd on last_used_at)."""
@@ -91,48 +95,59 @@ async def test_users_directory_hides_admin_flag(client):
 
 
 @pytest.mark.asyncio
-async def test_sync_requires_admin(client):
-    """M2: the instance-wide sync trigger is admin-only."""
+async def test_sync_is_per_user(client):
+    """Sync is now per-user (each user syncs their own Nextcloud), not admin-only.
+    With no Nextcloud configured it returns a skipped result, not an error."""
     await _register(client, "a@example.com", "A")  # admin
-    await _register(client, "b@example.com", "B")  # non-admin (client now B)
-    assert (await client.post("/api/contacts/sync")).status_code == 403
+    await _register(client, "b@example.com", "B")  # regular user (client now B)
+    resp = await client.post("/api/contacts/sync")
+    assert resp.status_code == 200
+    assert resp.json()["skipped_reason"] == "Nextcloud not configured"
 
 
 @pytest.mark.asyncio
-async def test_private_event_not_leaked_via_attendee(client):
-    """L4: adding someone as an attendee of a PRIVATE event does not expose it."""
+async def test_linked_attendee_sees_event(client):
+    """A contact explicitly linked to user B lets B see events that contact
+    attends (even private ones); an unlinked attendee grants no visibility."""
     await _register(client, "a@example.com", "A")
     await _register(client, "b@example.com", "B")  # client now B
+    b_id = await _uid(client)
     await _login(client, "a@example.com")
-    # A has a contact whose email matches user B, attached to a private event.
-    cid = (
-        await client.post(
-            "/api/contacts",
-            json={"display_name": "B-link", "emails": [{"type": "home", "value": "b@example.com"}]},
-        )
-    ).json()["id"]
-    priv = (
+
+    linked = (await client.post("/api/contacts", json={"display_name": "B"})).json()["id"]
+    await client.patch(f"/api/contacts/{linked}", json={"linked_user_id": b_id})
+    other = (await client.post("/api/contacts", json={"display_name": "Someone"})).json()["id"]
+
+    shared = (
         await client.post(
             "/api/events",
             json={
-                "title": "Private",
+                "title": "Shared",
                 "starts_at": "2026-08-01T19:00:00Z",
                 "visibility": "private",
-                "attendee_contact_ids": [cid],
+                "attendee_contact_ids": [linked],
             },
         )
     ).json()["id"]
-    grp = (
+    hidden = (
         await client.post(
             "/api/events",
             json={
-                "title": "Group",
+                "title": "Hidden",
                 "starts_at": "2026-08-02T19:00:00Z",
-                "visibility": "group",
-                "attendee_contact_ids": [cid],
+                "visibility": "private",
+                "attendee_contact_ids": [other],
             },
         )
     ).json()["id"]
+
     await _login(client, "b@example.com")
-    assert (await client.get(f"/api/events/{priv}")).status_code == 404  # private stays hidden
-    assert (await client.get(f"/api/events/{grp}")).status_code == 200  # group = attended
+    assert (await client.get(f"/api/events/{shared}")).status_code == 200  # linked attendee sees it
+    assert (await client.get(f"/api/events/{hidden}")).status_code == 404  # unlinked: hidden
+
+    # B can import the linked contact (or any attendee contact) into their own.
+    atts = (await client.get(f"/api/events/{shared}/attendees")).json()
+    assert atts and atts[0]["name"] == "B"
+    imported = await client.post(f"/api/events/{shared}/attendees/{atts[0]['attendee_id']}/import")
+    assert imported.status_code == 200
+    assert imported.json()["owner_id"] == b_id

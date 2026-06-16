@@ -65,7 +65,7 @@ async def create_template(
     session.add(tpl)
     await session.commit()
     await session.refresh(tpl)
-    await push_journal_reminder(tpl)
+    await push_journal_reminder(user, tpl)
     return tpl
 
 
@@ -85,9 +85,9 @@ async def update_template(
     await session.commit()
     await session.refresh(tpl)
     if tpl.active and tpl.reminder_time:
-        await push_journal_reminder(tpl)
+        await push_journal_reminder(user, tpl)
     else:
-        await delete_journal_reminder(tpl.id)
+        await delete_journal_reminder(user, tpl.id)
     return tpl
 
 
@@ -98,7 +98,7 @@ async def delete_template(
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     tpl = await _own_template(session, user, template_id)
-    await delete_journal_reminder(tpl.id)
+    await delete_journal_reminder(user, tpl.id)
     await session.delete(tpl)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

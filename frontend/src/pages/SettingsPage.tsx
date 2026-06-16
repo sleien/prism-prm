@@ -1,10 +1,10 @@
-import { type FormEvent, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, Plus, Trash2, UserMinus } from "lucide-react";
-import { api } from "@/lib/api";
-import type { Contact, Group, JournalTemplate, UserOut } from "@/lib/types";
+import { Eye, EyeOff, Trash2 } from "lucide-react";
+import { api, ApiError } from "@/lib/api";
+import type { Contact, JournalTemplate, UserOut } from "@/lib/types";
 import { useAuth } from "@/auth/AuthContext";
-import { Button, Card, Input, Select } from "@/components/ui";
+import { Button, Card, Input, Label, Select } from "@/components/ui";
 
 export function SettingsPage() {
   const qc = useQueryClient();
@@ -14,7 +14,6 @@ export function SettingsPage() {
     queryKey: ["partners"],
     queryFn: () => api.get<UserOut[]>("/api/sharing/partners"),
   });
-  const { data: groups } = useQuery({ queryKey: ["groups"], queryFn: () => api.get<Group[]>("/api/groups") });
   const { data: contacts } = useQuery({ queryKey: ["contacts"], queryFn: () => api.get<Contact[]>("/api/contacts") });
   const { data: journals } = useQuery({
     queryKey: ["journal-templates"],
@@ -24,21 +23,33 @@ export function SettingsPage() {
   const partnerIds = new Set((partners ?? []).map((p) => p.id));
   const others = (users ?? []).filter((u) => u.id !== me?.user.id);
 
+  // Preferences + Nextcloud form state, seeded from /me.
+  const [currency, setCurrency] = useState("CHF");
+  const [phoneCC, setPhoneCC] = useState("+41");
+  const [phoneFmt, setPhoneFmt] = useState("xxx xxx xx xx");
+  const [ncUrl, setNcUrl] = useState("");
+  const [ncUser, setNcUser] = useState("");
+  const [ncPass, setNcPass] = useState("");
+  const [ncBook, setNcBook] = useState("");
+  const [ncCal, setNcCal] = useState("");
+  const [flash, setFlash] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!me) return;
+    setCurrency(me.default_currency);
+    setPhoneCC(me.phone_country_code);
+    setPhoneFmt(me.phone_number_format);
+    setNcUrl(me.nextcloud_url ?? "");
+    setNcUser(me.nextcloud_username ?? "");
+    setNcBook(me.nextcloud_addressbook ?? "");
+    setNcCal(me.nextcloud_calendar ?? "");
+  }, [me]);
+
   async function togglePartner(id: number, on: boolean) {
     if (on) await api.put(`/api/sharing/partners/${id}`);
     else await api.del(`/api/sharing/partners/${id}`);
     await qc.invalidateQueries({ queryKey: ["partners"] });
   }
-
-  const [groupName, setGroupName] = useState("");
-  async function createGroup(e: FormEvent) {
-    e.preventDefault();
-    if (!groupName.trim()) return;
-    await api.post<Group>("/api/groups", { name: groupName });
-    setGroupName("");
-    await qc.invalidateQueries({ queryKey: ["groups"] });
-  }
-
   async function toggleJournal(id: number, active: boolean) {
     await api.patch(`/api/journal/templates/${id}`, { active });
     await qc.invalidateQueries({ queryKey: ["journal-templates"] });
@@ -48,15 +59,110 @@ export function SettingsPage() {
     await api.del(`/api/journal/templates/${id}`);
     await qc.invalidateQueries({ queryKey: ["journal-templates"] });
   }
-
   async function setSelfContact(value: string) {
     await api.put("/api/auth/self-contact", { contact_id: value ? Number(value) : null });
     await refresh();
   }
+  async function savePrefs() {
+    await api.put("/api/auth/preferences", {
+      default_currency: currency,
+      phone_country_code: phoneCC,
+      phone_number_format: phoneFmt,
+    });
+    await refresh();
+    setFlash("Preferences saved");
+  }
+  async function saveNextcloud() {
+    try {
+      const body: Record<string, unknown> = {
+        nextcloud_url: ncUrl,
+        nextcloud_username: ncUser,
+        nextcloud_addressbook: ncBook,
+        nextcloud_calendar: ncCal,
+      };
+      if (ncPass) body.nextcloud_app_password = ncPass; // only changes when entered
+      await api.put("/api/auth/nextcloud", body);
+      setNcPass("");
+      await refresh();
+      setFlash("Nextcloud settings saved");
+    } catch (e) {
+      setFlash(e instanceof ApiError ? e.message : "Could not save Nextcloud settings");
+    }
+  }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-semibold">Settings</h1>
+        {flash && <span className="text-sm text-emerald-500">{flash}</span>}
+      </div>
+
+      <Card className="p-5">
+        <div className="mb-3 font-medium">Preferences</div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <Label htmlFor="p-cur">Default currency</Label>
+            <Input id="p-cur" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="p-cc">Phone country code</Label>
+            <Input id="p-cc" value={phoneCC} onChange={(e) => setPhoneCC(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="p-fmt">Phone number format</Label>
+            <Input id="p-fmt" value={phoneFmt} onChange={(e) => setPhoneFmt(e.target.value)} />
+          </div>
+        </div>
+        <Button className="mt-3" onClick={() => void savePrefs()}>
+          Save preferences
+        </Button>
+      </Card>
+
+      <Card className="p-5">
+        <div className="mb-1 flex items-center gap-2 font-medium">
+          Nextcloud
+          {me?.nextcloud_configured && (
+            <span className="rounded-full border border-emerald-500/40 px-2 py-0.5 text-xs text-emerald-500">
+              connected
+            </span>
+          )}
+        </div>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Your own Nextcloud. Contacts sync from here and events/reminders are pushed to it. Use an
+          app password (Nextcloud → Settings → Security → Devices &amp; sessions).
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label htmlFor="nc-url">Server URL</Label>
+            <Input id="nc-url" value={ncUrl} onChange={(e) => setNcUrl(e.target.value)} placeholder="https://cloud.example.com" />
+          </div>
+          <div>
+            <Label htmlFor="nc-user">Username</Label>
+            <Input id="nc-user" value={ncUser} onChange={(e) => setNcUser(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="nc-pass">App password</Label>
+            <Input
+              id="nc-pass"
+              type="password"
+              value={ncPass}
+              onChange={(e) => setNcPass(e.target.value)}
+              placeholder={me?.nextcloud_username ? "•••••• (leave blank to keep)" : ""}
+            />
+          </div>
+          <div>
+            <Label htmlFor="nc-book">Address book</Label>
+            <Input id="nc-book" value={ncBook} onChange={(e) => setNcBook(e.target.value)} placeholder="contacts" />
+          </div>
+          <div>
+            <Label htmlFor="nc-cal">Calendar</Label>
+            <Input id="nc-cal" value={ncCal} onChange={(e) => setNcCal(e.target.value)} placeholder="personal" />
+          </div>
+        </div>
+        <Button className="mt-3" onClick={() => void saveNextcloud()}>
+          Save Nextcloud settings
+        </Button>
+      </Card>
 
       <Card className="p-5">
         <div className="mb-1 font-medium">Partners</div>
@@ -89,32 +195,6 @@ export function SettingsPage() {
       </Card>
 
       <Card className="p-5">
-        <div className="mb-1 font-medium">Groups</div>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Group members can see records you share with the group.
-        </p>
-        <form onSubmit={createGroup} className="mb-4 flex gap-2">
-          <Input
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-            placeholder="New group name (e.g. Family)"
-            className="max-w-xs"
-          />
-          <Button type="submit">
-            <Plus size={16} /> Create
-          </Button>
-        </form>
-        <div className="space-y-3">
-          {(groups ?? []).map((g) => (
-            <GroupCard key={g.id} group={g} users={users ?? []} />
-          ))}
-          {groups && groups.length === 0 && (
-            <p className="text-sm text-muted-foreground">No groups yet.</p>
-          )}
-        </div>
-      </Card>
-
-      <Card className="p-5">
         <div className="mb-1 font-medium">This is me</div>
         <p className="mb-3 text-sm text-muted-foreground">
           Pick the contact that represents you, so you can appear in relationships (e.g. “Partner: You”).
@@ -136,7 +216,8 @@ export function SettingsPage() {
       <Card className="p-5">
         <div className="mb-1 font-medium">Journals</div>
         <p className="mb-3 text-sm text-muted-foreground">
-          Hide a journal to remove it from the Journal page without losing its entries, or delete it.
+          Hide a journal to remove it from the Journal page without losing its entries, or delete
+          it. Edit journals from the Journal page.
         </p>
         {(journals ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">No journals yet.</p>
@@ -169,59 +250,5 @@ export function SettingsPage() {
         )}
       </Card>
     </div>
-  );
-}
-
-function GroupCard({ group, users }: { group: Group; users: UserOut[] }) {
-  const qc = useQueryClient();
-  const { data: members } = useQuery({
-    queryKey: ["group-members", group.id],
-    queryFn: () => api.get<UserOut[]>(`/api/groups/${group.id}/members`),
-  });
-  const memberIds = new Set((members ?? []).map((m) => m.id));
-  const [addId, setAddId] = useState("");
-
-  async function add() {
-    if (!addId) return;
-    await api.put(`/api/groups/${group.id}/members/${addId}`);
-    setAddId("");
-    await qc.invalidateQueries({ queryKey: ["group-members", group.id] });
-  }
-  async function remove(id: number) {
-    await api.del(`/api/groups/${group.id}/members/${id}`);
-    await qc.invalidateQueries({ queryKey: ["group-members", group.id] });
-  }
-
-  const candidates = users.filter((u) => !memberIds.has(u.id));
-
-  return (
-    <Card className="bg-muted/30 p-4">
-      <div className="mb-2 font-medium">{group.name}</div>
-      <div className="flex flex-wrap gap-2">
-        {(members ?? []).map((m) => (
-          <span key={m.id} className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm">
-            {m.display_name}
-            <button onClick={() => void remove(m.id)} className="text-muted-foreground hover:text-destructive">
-              <UserMinus size={13} />
-            </button>
-          </span>
-        ))}
-      </div>
-      {candidates.length > 0 && (
-        <div className="mt-3 flex gap-2">
-          <Select value={addId} onChange={(e) => setAddId(e.target.value)} className="max-w-xs">
-            <option value="">Add member…</option>
-            {candidates.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.display_name}
-              </option>
-            ))}
-          </Select>
-          <Button type="button" variant="secondary" onClick={() => void add()}>
-            Add
-          </Button>
-        </div>
-      )}
-    </Card>
   );
 }

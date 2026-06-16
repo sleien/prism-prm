@@ -11,6 +11,7 @@ import type {
   RelatedContact,
   RelationshipType,
   TypedValue,
+  UserOut,
   Visibility,
 } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
@@ -38,6 +39,7 @@ export function ContactDetailPage() {
     queryKey: ["contact", id],
     queryFn: () => api.get<Contact>(`/api/contacts/${id}`),
   });
+  const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get<UserOut[]>("/api/users") });
 
   const [form, setForm] = useState<Partial<Contact>>({});
   const [emails, setEmails] = useState<TypedValue[]>([]);
@@ -75,6 +77,7 @@ export function ContactDetailPage() {
         birthday: form.birthday || null,
         notes: form.notes,
         visibility: form.visibility,
+        linked_user_id: form.linked_user_id ?? null,
         emails: emails.filter((x) => x.value),
         phones: phones.filter((x) => x.value),
         addresses: addresses.filter((a) => a.street || a.city || a.country),
@@ -171,10 +174,27 @@ export function ContactDetailPage() {
               value={form.visibility ?? "public"}
               onChange={(e) => set("visibility", e.target.value as Visibility)}
             >
-              <option value="public">Public — all users</option>
-              <option value="group">Group — a circle</option>
               <option value="private">Private — you + partners</option>
+              <option value="public">Public — all users</option>
             </Select>
+          </div>
+          <div>
+            <Label htmlFor="d-link">Linked user</Label>
+            <Select
+              id="d-link"
+              value={form.linked_user_id ? String(form.linked_user_id) : ""}
+              onChange={(e) => set("linked_user_id", e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">— none —</option>
+              {(users ?? []).map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.display_name}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Linking this contact to a user lets them see events they’re invited to.
+            </p>
           </div>
 
           <div className="sm:col-span-2">

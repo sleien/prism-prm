@@ -68,11 +68,12 @@ async def event_visibility_filter(session: AsyncSession, user: User) -> ColumnEl
     regardless of its base visibility.
     """
     base = await visibility_filter(session, user, Event)
-    # Attending grants visibility only for non-private events, so someone can't
-    # leak a PRIVATE event into another user's view just by listing them as an
-    # attendee — private stays owner + designated partners only.
+    # An attendee linked to a Prism user can see the event regardless of its
+    # visibility — that linkage is set deliberately (a contact is explicitly
+    # connected to a user), so it's intentional sharing, e.g. a partner inviting
+    # you to their otherwise-private event.
     attended = select(EventAttendee.event_id).where(EventAttendee.user_id == user.id)
-    return or_(base, and_(Event.visibility != Visibility.PRIVATE, Event.id.in_(attended)))
+    return or_(base, Event.id.in_(attended))
 
 
 async def validate_group_choice(

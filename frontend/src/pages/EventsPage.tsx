@@ -1,10 +1,12 @@
 import { type FormEvent, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Coins, MapPin, Plus, Trash2, Users } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { CalEvent, Contact, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
+import { useAuth } from "@/auth/AuthContext";
 
 const reminderOptions = [
   { label: "No reminder", value: -1 },
@@ -30,6 +32,7 @@ function nowValue(allDay: boolean): string {
 
 export function EventsPage() {
   const qc = useQueryClient();
+  const { me } = useAuth();
   const { data: events, isLoading, error } = useQuery({
     queryKey: ["events"],
     queryFn: () => api.get<CalEvent[]>("/api/events"),
@@ -47,7 +50,7 @@ export function EventsPage() {
   const [end, setEnd] = useState("");
   const [location, setLocation] = useState("");
   const [cost, setCost] = useState("");
-  const [currency, setCurrency] = useState("EUR");
+  const [currency, setCurrency] = useState(me?.default_currency ?? "CHF");
   const [visibility, setVisibility] = useState<Visibility>("private");
   const [allDay, setAllDay] = useState(false);
   const [attendees, setAttendees] = useState<number[]>([]);
@@ -206,9 +209,8 @@ export function EventsPage() {
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value as Visibility)}
               >
-                <option value="public">Public — all users</option>
-                <option value="group">Group — all attendees can see</option>
                 <option value="private">Private — you + partners</option>
+                <option value="public">Public — all users</option>
               </Select>
             </div>
             {contacts && contacts.length > 0 && (
@@ -264,7 +266,9 @@ export function EventsPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{ev.title}</span>
+                  <Link to={`/events/${ev.id}`} className="font-medium hover:underline">
+                    {ev.title}
+                  </Link>
                   <Badge className={visibilityStyles[ev.visibility]}>{ev.visibility}</Badge>
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">

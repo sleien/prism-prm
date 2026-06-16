@@ -7,9 +7,9 @@ from datetime import date, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
-from app.config import settings
 from app.integrations.ical import build_journal_reminder_ics
-from app.integrations.nextcloud import ICAL_CONTENT_TYPE, DavError, NextcloudClient
+from app.integrations.nextcloud import ICAL_CONTENT_TYPE, DavError
+from app.services.nextcloud_accounts import client_for_user
 
 log = logging.getLogger("prism.journal")
 
@@ -41,13 +41,16 @@ def extract_mood(prompts: list[dict], data: dict) -> int | None:
         return None
 
 
-async def push_journal_reminder(template: Any) -> None:
-    """Upsert the template's recurring reminder VEVENT in Nextcloud (best-effort)."""
-    if not (settings.nextcloud_configured and template.reminder_time and template.active):
+async def push_journal_reminder(owner: Any, template: Any) -> None:
+    """Upsert the template's recurring reminder VEVENT in the owner's calendar."""
+    if not (template.reminder_time and template.active):
+        return
+    nc = client_for_user(owner)
+    if nc is None:
         return
     try:
         ics, uid = build_journal_reminder_ics(template)
-        async with NextcloudClient.from_settings() as nc:
+        async with nc:
             cal_url = await nc.calendar_url()
             href = f"{urlparse(cal_url).path.rstrip('/')}/{uid}.ics"
             await nc.put_object(href, ics, ICAL_CONTENT_TYPE, etag=None, create_only=False)
@@ -55,11 +58,12 @@ async def push_journal_reminder(template: Any) -> None:
         log.warning("Journal reminder push failed: %s", exc)
 
 
-async def delete_journal_reminder(template_id: int) -> None:
-    if not settings.nextcloud_configured:
+async def delete_journal_reminder(owner: Any, template_id: int) -> None:
+    nc = client_for_user(owner)
+    if nc is None:
         return
     try:
-        async with NextcloudClient.from_settings() as nc:
+        async with nc:
             cal_url = await nc.calendar_url()
             href = f"{urlparse(cal_url).path.rstrip('/')}/prism-journal-{template_id}.ics"
             await nc.delete_object(href)

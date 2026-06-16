@@ -31,6 +31,11 @@ class Contact(Base, TimestampMixin):
     group_id: Mapped[int | None] = mapped_column(
         ForeignKey("group.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Optionally link this contact to a registered Prism user, so that user gets
+    # attendee-based visibility of events this contact is invited to.
+    linked_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # --- Nextcloud / CardDAV correlation ---
     nextcloud_uid: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
