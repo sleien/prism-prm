@@ -61,10 +61,11 @@ def _parse_bday(value: Any) -> date | None:
 
 def parse_vcard(text: str) -> dict[str, Any]:
     """Parse a vCard into a dict of Contact fields. Never raises on bad input."""
+    empty = {"display_name": "", "emails": [], "phones": [], "addresses": [], "custom_fields": {}}
     try:
         card = vobject.readOne(text)
     except Exception:  # noqa: BLE001 - tolerate any malformed card
-        return {"display_name": "", "emails": [], "phones": [], "addresses": [], "custom_fields": {}}
+        return empty
 
     def val(attr: str) -> str | None:
         node = getattr(card, attr, None)

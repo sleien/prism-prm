@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="spectrum" x1="32" y1="34" x2="60" y2="34" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f43f5e"/>
+      <stop offset="0.5" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <!-- incoming beam -->
+  <line x1="4" y1="30" x2="26" y2="30" stroke="#e2e8f0" stroke-width="2.5"/>
+  <!-- refracted spectrum -->
+  <path d="M32 32 L60 22 M32 32 L60 32 M32 32 L60 42" stroke="url(#spectrum)" stroke-width="2.5"/>
+  <!-- prism -->
+  <path d="M30 10 L48 44 L12 44 Z" fill="#8b5cf6" fill-opacity="0.18" stroke="#8b5cf6" stroke-width="2.5" stroke-linejoin="round"/>
+</svg>
