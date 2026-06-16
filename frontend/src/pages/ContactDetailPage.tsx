@@ -34,6 +34,9 @@ export function ContactDetailPage() {
   const id = Number(params.id);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { me } = useAuth();
+  const phoneCc = me?.phone_country_code ?? "+41";
+  const phonePlaceholder = `${phoneCc} ${me?.phone_number_format ?? "xxx xxx xx xx"}`;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["contact", id],
@@ -201,7 +204,13 @@ export function ContactDetailPage() {
             <ValueListEditor label="Emails" placeholder="name@example.com" items={emails} onChange={setEmails} />
           </div>
           <div className="sm:col-span-2">
-            <ValueListEditor label="Phones" placeholder="+1 555 0100" items={phones} onChange={setPhones} />
+            <ValueListEditor
+              label="Phones"
+              placeholder={phonePlaceholder}
+              newValue={`${phoneCc} `}
+              items={phones}
+              onChange={setPhones}
+            />
           </div>
           <div className="sm:col-span-2">
             <AddressListEditor items={addresses} onChange={setAddresses} />
@@ -282,11 +291,13 @@ function ValueListEditor({
   placeholder,
   items,
   onChange,
+  newValue = "",
 }: {
   label: string;
   placeholder: string;
   items: TypedValue[];
   onChange: (v: TypedValue[]) => void;
+  newValue?: string;
 }) {
   return (
     <div>
@@ -320,7 +331,7 @@ function ValueListEditor({
         type="button"
         variant="ghost"
         className="mt-1"
-        onClick={() => onChange([...items, { type: "home", value: "" }])}
+        onClick={() => onChange([...items, { type: "home", value: newValue }])}
       >
         <Plus size={14} /> Add {label.toLowerCase().replace(/s$/, "")}
       </Button>

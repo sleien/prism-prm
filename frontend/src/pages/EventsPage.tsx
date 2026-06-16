@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Coins, MapPin, Plus, Trash2, Users } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { CalEvent, Contact, Visibility } from "@/lib/types";
+import type { CalEvent, Contact, EventType, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
 import { useAuth } from "@/auth/AuthContext";
@@ -41,8 +41,14 @@ export function EventsPage() {
     queryKey: ["contacts"],
     queryFn: () => api.get<Contact[]>("/api/contacts"),
   });
+  const { data: eventTypes } = useQuery({
+    queryKey: ["event-types"],
+    queryFn: () => api.get<EventType[]>("/api/event-types"),
+  });
   const contactName = (id: number | null) =>
     contacts?.find((c) => c.id === id)?.display_name ?? "Someone";
+  const typeEmoji = (name?: string | null) =>
+    eventTypes?.find((t) => t.name === name)?.emoji ?? "";
 
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -52,6 +58,7 @@ export function EventsPage() {
   const [cost, setCost] = useState("");
   const [currency, setCurrency] = useState(me?.default_currency ?? "CHF");
   const [visibility, setVisibility] = useState<Visibility>("private");
+  const [eventType, setEventType] = useState("");
   const [allDay, setAllDay] = useState(false);
   const [attendees, setAttendees] = useState<number[]>([]);
   const [reminder, setReminder] = useState(60);
@@ -74,6 +81,7 @@ export function EventsPage() {
         title,
         starts_at: toIso(start),
         all_day: allDay,
+        event_type: eventType || null,
         visibility,
         attendee_contact_ids: attendees,
         reminders: reminder >= 0 ? [{ minutes_before: reminder }] : [],
@@ -91,6 +99,7 @@ export function EventsPage() {
       setLocation("");
       setCost("");
       setAttendees([]);
+      setEventType("");
       setShowForm(false);
       await qc.invalidateQueries({ queryKey: ["events"] });
     } catch (err) {
@@ -213,6 +222,18 @@ export function EventsPage() {
                 <option value="public">Public — all users</option>
               </Select>
             </div>
+            <div>
+              <Label htmlFor="e-type">Type</Label>
+              <Select id="e-type" value={eventType} onChange={(e) => setEventType(e.target.value)}>
+                <option value="">— none —</option>
+                {(eventTypes ?? []).map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.emoji ? `${t.emoji} ` : ""}
+                    {t.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
             {contacts && contacts.length > 0 && (
               <div className="sm:col-span-2">
                 <Label>Attendees</Label>
@@ -270,6 +291,11 @@ export function EventsPage() {
                     {ev.title}
                   </Link>
                   <Badge className={visibilityStyles[ev.visibility]}>{ev.visibility}</Badge>
+                  {ev.event_type && (
+                    <Badge className="border-border text-muted-foreground">
+                      {typeEmoji(ev.event_type)} {ev.event_type}
+                    </Badge>
+                  )}
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   {fmt(ev.starts_at, ev.all_day)}

@@ -4,6 +4,7 @@ from app.models.contact import Contact
 from app.models.enrichment import (
     ContactLifeEvent,
     ContactRelationship,
+    EventType,
     LifeEventType,
     RelationshipType,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "Event",
     "EventAttendee",
     "EventNote",
+    "EventType",
     "Group",
     "GroupMembership",
     "JournalEntry",

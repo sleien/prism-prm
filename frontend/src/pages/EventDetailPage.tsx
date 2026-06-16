@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Coins, MapPin, Trash2, UserPlus } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { AttendeeDetail, CalEvent, Contact, Visibility } from "@/lib/types";
+import type { AttendeeDetail, CalEvent, Contact, EventType, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
 import { useAuth } from "@/auth/AuthContext";
@@ -42,6 +42,10 @@ export function EventDetailPage() {
     queryKey: ["event-attendees", id],
     queryFn: () => api.get<AttendeeDetail[]>(`/api/events/${id}/attendees`),
   });
+  const { data: eventTypes } = useQuery({
+    queryKey: ["event-types"],
+    queryFn: () => api.get<EventType[]>("/api/event-types"),
+  });
 
   const canEdit = !!event && me?.user.id === event.owner_id;
 
@@ -54,6 +58,7 @@ export function EventDetailPage() {
   const [cost, setCost] = useState("");
   const [currency, setCurrency] = useState("CHF");
   const [visibility, setVisibility] = useState<Visibility>("private");
+  const [eventType, setEventType] = useState("");
   const [picked, setPicked] = useState<number[]>([]);
   const [reminder, setReminder] = useState("keep");
   const [busy, setBusy] = useState(false);
@@ -70,6 +75,7 @@ export function EventDetailPage() {
     setCost(event.cost_amount ?? "");
     setCurrency(event.cost_currency ?? me?.default_currency ?? "CHF");
     setVisibility(event.visibility);
+    setEventType(event.event_type ?? "");
     setPicked(event.attendees.map((a) => a.contact_id).filter((x): x is number => x != null));
     setReminder("keep");
   }, [event, me]);
@@ -90,6 +96,7 @@ export function EventDetailPage() {
         cost_amount: cost || null,
         cost_currency: cost ? currency : null,
         visibility,
+        event_type: eventType || null,
         attendee_contact_ids: picked,
       };
       if (reminder !== "keep") {
@@ -214,6 +221,18 @@ export function EventDetailPage() {
               <Select id="ev-vis" value={visibility} onChange={(e) => setVisibility(e.target.value as Visibility)}>
                 <option value="private">Private — you + partners</option>
                 <option value="public">Public — all users</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="ev-type">Type</Label>
+              <Select id="ev-type" value={eventType} onChange={(e) => setEventType(e.target.value)}>
+                <option value="">— none —</option>
+                {(eventTypes ?? []).map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.emoji ? `${t.emoji} ` : ""}
+                    {t.name}
+                  </option>
+                ))}
               </Select>
             </div>
             {contacts && contacts.length > 0 && (

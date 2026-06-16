@@ -90,6 +90,12 @@ export interface LifeEventType {
   emoji?: string | null;
 }
 
+export interface EventType {
+  id: number;
+  name: string;
+  emoji?: string | null;
+}
+
 export interface LifeEvent {
   id: number;
   contact_id: number;
@@ -198,6 +204,7 @@ export interface CalEvent {
   starts_at: string;
   ends_at?: string | null;
   all_day: boolean;
+  event_type?: string | null;
   location?: string | null;
   cost_amount?: string | null;
   cost_currency?: string | null;

@@ -47,6 +47,18 @@ class LifeEventTypeOut(LifeEventTypeIn):
     id: int
 
 
+# --- event types ---
+class EventTypeIn(BaseModel):
+    name: str = Field(max_length=80)
+    emoji: str | None = Field(default=None, max_length=16)
+
+
+class EventTypeOut(EventTypeIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+
 # --- life events ---
 class LifeEventCreate(BaseModel):
     contact_id: int

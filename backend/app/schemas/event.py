@@ -42,6 +42,7 @@ class EventBase(BaseModel):
     starts_at: datetime
     ends_at: datetime | None = None
     all_day: bool = False
+    event_type: str | None = Field(default=None, max_length=80)
     rrule: str | None = Field(default=None, max_length=500)
     location: str | None = Field(default=None, max_length=500)
     cost_amount: Decimal | None = Field(default=None, ge=0, le=10**10)
@@ -69,6 +70,7 @@ class EventUpdate(BaseModel):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     all_day: bool | None = None
+    event_type: str | None = Field(default=None, max_length=80)
     rrule: str | None = Field(default=None, max_length=500)
     location: str | None = Field(default=None, max_length=500)
     cost_amount: Decimal | None = Field(default=None, ge=0, le=10**10)

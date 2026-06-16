@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
@@ -249,6 +249,113 @@ export function SettingsPage() {
           </ul>
         )}
       </Card>
+
+      <TypeCatalog
+        title="Relationship types"
+        description="The relationship kinds offered when linking contacts."
+        endpoint="/api/relationship-types"
+        queryKey="relationship-types"
+        kind="relation"
+      />
+      <TypeCatalog
+        title="Life-event types"
+        description="The milestone presets offered on a contact's timeline."
+        endpoint="/api/life-event-types"
+        queryKey="life-event-types"
+        kind="emoji"
+      />
+      <TypeCatalog
+        title="Event types"
+        description="The categories offered when creating an event."
+        endpoint="/api/event-types"
+        queryKey="event-types"
+        kind="emoji"
+      />
     </div>
+  );
+}
+
+interface CatalogItem {
+  id: number;
+  name: string;
+  emoji?: string | null;
+  reverse_name?: string | null;
+}
+
+function TypeCatalog({
+  title,
+  description,
+  endpoint,
+  queryKey,
+  kind,
+}: {
+  title: string;
+  description: string;
+  endpoint: string;
+  queryKey: string;
+  kind: "emoji" | "relation";
+}) {
+  const qc = useQueryClient();
+  const { data: items } = useQuery({ queryKey: [queryKey], queryFn: () => api.get<CatalogItem[]>(endpoint) });
+  const [name, setName] = useState("");
+  const [extra, setExtra] = useState("");
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const body =
+      kind === "emoji" ? { name, emoji: extra || null } : { name, reverse_name: extra || null };
+    await api.post(endpoint, body);
+    setName("");
+    setExtra("");
+    await qc.invalidateQueries({ queryKey: [queryKey] });
+  }
+  async function remove(itemId: number) {
+    await api.del(`${endpoint}/${itemId}`);
+    await qc.invalidateQueries({ queryKey: [queryKey] });
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-1 font-medium">{title}</div>
+      <p className="mb-3 text-sm text-muted-foreground">{description}</p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        {(items ?? []).map((it) => (
+          <span key={it.id} className="flex items-center gap-1 rounded-full border px-3 py-1 text-sm">
+            {kind === "emoji" && it.emoji ? `${it.emoji} ` : ""}
+            {it.name}
+            {kind === "relation" && it.reverse_name ? (
+              <span className="text-muted-foreground"> ↔ {it.reverse_name}</span>
+            ) : null}
+            <button onClick={() => void remove(it.id)} className="text-muted-foreground hover:text-destructive">
+              <Trash2 size={13} />
+            </button>
+          </span>
+        ))}
+        {items && items.length === 0 && <span className="text-sm text-muted-foreground">None yet.</span>}
+      </div>
+      <form onSubmit={add} className="flex flex-wrap gap-2">
+        {kind === "emoji" && (
+          <Input className="w-16" placeholder="🎂" value={extra} onChange={(e) => setExtra(e.target.value)} />
+        )}
+        <Input
+          className="max-w-xs"
+          placeholder={kind === "relation" ? "Name (e.g. Mentor)" : "Name"}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        {kind === "relation" && (
+          <Input
+            className="max-w-xs"
+            placeholder="Reverse (e.g. Mentee)"
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+          />
+        )}
+        <Button type="submit" variant="secondary">
+          Add
+        </Button>
+      </form>
+    </Card>
   );
 }

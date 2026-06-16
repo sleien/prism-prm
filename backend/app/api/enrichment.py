@@ -17,11 +17,14 @@ from app.models import (
     Contact,
     ContactLifeEvent,
     ContactRelationship,
+    EventType,
     LifeEventType,
     RelationshipType,
     User,
 )
 from app.schemas.enrichment import (
+    EventTypeIn,
+    EventTypeOut,
     LifeEventCreate,
     LifeEventOut,
     LifeEventTypeIn,
@@ -52,6 +55,15 @@ _DEFAULT_LIFE_EVENT_TYPES = [
     ("Graduated", "🎓"),
     ("Anniversary", "🎉"),
     ("Met", "🤝"),
+]
+_DEFAULT_EVENT_TYPES = [
+    ("Birthday", "🎂"),
+    ("Dinner", "🍽️"),
+    ("Meeting", "🤝"),
+    ("Trip", "✈️"),
+    ("Party", "🎉"),
+    ("Call", "📞"),
+    ("Appointment", "📅"),
 ]
 
 
@@ -288,5 +300,53 @@ async def delete_life_event(
     event = await session.get(ContactLifeEvent, event_id)
     if event is not None and event.owner_id == user.id:
         await session.delete(event)
+        await session.commit()
+    return Response(status_code=204)
+
+
+# --- event types ------------------------------------------------------------
+
+
+@router.get("/event-types", response_model=list[EventTypeOut])
+async def list_event_types(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> list[EventType]:
+    rows = list(
+        (await session.scalars(select(EventType).where(EventType.owner_id == user.id))).all()
+    )
+    if not rows:
+        rows = [
+            EventType(owner_id=user.id, name=name, emoji=emoji)
+            for name, emoji in _DEFAULT_EVENT_TYPES
+        ]
+        session.add_all(rows)
+        await session.commit()
+        for r in rows:
+            await session.refresh(r)
+    return sorted(rows, key=lambda r: r.id)
+
+
+@router.post("/event-types", response_model=EventTypeOut, status_code=201)
+async def create_event_type(
+    payload: EventTypeIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> EventType:
+    et = EventType(owner_id=user.id, name=payload.name, emoji=payload.emoji)
+    session.add(et)
+    await session.commit()
+    await session.refresh(et)
+    return et
+
+
+@router.delete("/event-types/{type_id}", status_code=204)
+async def delete_event_type(
+    type_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    et = await session.get(EventType, type_id)
+    if et is not None and et.owner_id == user.id:
+        await session.delete(et)
         await session.commit()
     return Response(status_code=204)

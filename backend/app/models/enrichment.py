@@ -57,6 +57,17 @@ class LifeEventType(Base, TimestampMixin):
     emoji: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
 
+class EventType(Base, TimestampMixin):
+    """A user-defined kind of event, e.g. "Birthday" 🎂 or "Dinner" 🍽️."""
+
+    __tablename__ = "event_type"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    emoji: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+
 class ContactLifeEvent(Base, TimestampMixin):
     """A dated milestone on a contact's timeline (label denormalized)."""
 

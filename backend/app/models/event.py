@@ -31,6 +31,8 @@ class Event(Base, TimestampMixin):
     all_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # iCalendar RRULE string for recurring events (e.g. "FREQ=WEEKLY;BYDAY=MO").
     rrule: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # User-chosen category (name from the user's EventType catalog).
+    event_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     # Location + geocode (for weather enrichment).
     location: Mapped[str | None] = mapped_column(String(500), nullable=True)
