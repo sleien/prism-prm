@@ -1,11 +1,31 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Cake, MapPin, Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { Contact, Visibility } from "@/lib/types";
+import type {
+  AddressItem,
+  Contact,
+  LifeEvent,
+  LifeEventType,
+  RelatedContact,
+  RelationshipType,
+  TypedValue,
+  Visibility,
+} from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
+
+function ageFrom(bday?: string | null): number | null {
+  if (!bday) return null;
+  const d = new Date(bday);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age >= 0 && age < 150 ? age : null;
+}
 
 export function ContactDetailPage() {
   const params = useParams<{ id: string }>();
@@ -19,8 +39,9 @@ export function ContactDetailPage() {
   });
 
   const [form, setForm] = useState<Partial<Contact>>({});
-  const [primaryEmail, setPrimaryEmail] = useState("");
-  const [primaryPhone, setPrimaryPhone] = useState("");
+  const [emails, setEmails] = useState<TypedValue[]>([]);
+  const [phones, setPhones] = useState<TypedValue[]>([]);
+  const [addresses, setAddresses] = useState<AddressItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -28,8 +49,9 @@ export function ContactDetailPage() {
   useEffect(() => {
     if (data) {
       setForm(data);
-      setPrimaryEmail(data.emails[0]?.value ?? "");
-      setPrimaryPhone(data.phones[0]?.value ?? "");
+      setEmails(data.emails ?? []);
+      setPhones(data.phones ?? []);
+      setAddresses(data.addresses ?? []);
     }
   }, [data]);
 
@@ -49,14 +71,16 @@ export function ContactDetailPage() {
         last_name: form.last_name,
         organization: form.organization,
         job_title: form.job_title,
+        birthday: form.birthday || null,
         notes: form.notes,
         visibility: form.visibility,
-        emails: primaryEmail ? [{ type: "home", value: primaryEmail }] : [],
-        phones: primaryPhone ? [{ type: "cell", value: primaryPhone }] : [],
+        emails: emails.filter((x) => x.value),
+        phones: phones.filter((x) => x.value),
+        addresses: addresses.filter((a) => a.street || a.city || a.country),
       });
       await qc.invalidateQueries({ queryKey: ["contact", id] });
       await qc.invalidateQueries({ queryKey: ["contacts"] });
-      setMsg("Saved — will sync to Nextcloud.");
+      setMsg("Saved — syncing to Nextcloud.");
     } catch (e2) {
       setErr(e2 instanceof ApiError ? e2.message : "Could not save");
     } finally {
@@ -82,21 +106,19 @@ export function ContactDetailPage() {
   if (error || !data)
     return (
       <div className="space-y-4">
-        <Link to="/contacts" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft size={16} /> Back
-        </Link>
+        <BackLink />
         <p className="text-sm text-destructive">
           {error instanceof ApiError ? error.message : "Contact not found"}
         </p>
       </div>
     );
 
+  const age = ageFrom(form.birthday);
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <Link to="/contacts" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft size={16} /> Back
-        </Link>
+      <div className="flex flex-wrap items-center gap-3">
+        <BackLink />
         <Badge className={visibilityStyles[data.visibility]}>{data.visibility}</Badge>
         {data.dirty ? (
           <span className="text-xs text-amber-500">• pending sync</span>
@@ -105,7 +127,12 @@ export function ContactDetailPage() {
             synced {new Date(data.last_synced_at).toLocaleString()}
           </span>
         ) : null}
-        <Button variant="ghost" className="ml-auto text-destructive" onClick={() => void remove()} disabled={busy}>
+        <Button
+          variant="ghost"
+          className="ml-auto text-destructive"
+          onClick={() => void remove()}
+          disabled={busy}
+        >
           <Trash2 size={16} /> Delete
         </Button>
       </div>
@@ -116,31 +143,27 @@ export function ContactDetailPage() {
             <Label htmlFor="d-name">Display name</Label>
             <Input id="d-name" value={form.display_name ?? ""} onChange={(e) => set("display_name", e.target.value)} />
           </div>
+          <Field label="First name" value={form.first_name} onChange={(v) => set("first_name", v)} />
+          <Field label="Last name" value={form.last_name} onChange={(v) => set("last_name", v)} />
+          <Field label="Organization" value={form.organization} onChange={(v) => set("organization", v)} />
+          <Field label="Job title" value={form.job_title} onChange={(v) => set("job_title", v)} />
           <div>
-            <Label htmlFor="d-first">First name</Label>
-            <Input id="d-first" value={form.first_name ?? ""} onChange={(e) => set("first_name", e.target.value)} />
+            <Label htmlFor="d-bday">Birthday</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="d-bday"
+                type="date"
+                value={form.birthday ?? ""}
+                onChange={(e) => set("birthday", e.target.value)}
+              />
+              {age != null && (
+                <span className="flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground">
+                  <Cake size={14} /> {age}
+                </span>
+              )}
+            </div>
           </div>
           <div>
-            <Label htmlFor="d-last">Last name</Label>
-            <Input id="d-last" value={form.last_name ?? ""} onChange={(e) => set("last_name", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="d-org">Organization</Label>
-            <Input id="d-org" value={form.organization ?? ""} onChange={(e) => set("organization", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="d-title">Job title</Label>
-            <Input id="d-title" value={form.job_title ?? ""} onChange={(e) => set("job_title", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="d-email">Email</Label>
-            <Input id="d-email" type="email" value={primaryEmail} onChange={(e) => setPrimaryEmail(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="d-phone">Phone</Label>
-            <Input id="d-phone" value={primaryPhone} onChange={(e) => setPrimaryPhone(e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
             <Label htmlFor="d-vis">Visibility</Label>
             <Select
               id="d-vis"
@@ -152,9 +175,20 @@ export function ContactDetailPage() {
               <option value="private">Private — you + partners</option>
             </Select>
           </div>
+
+          <div className="sm:col-span-2">
+            <ValueListEditor label="Emails" placeholder="name@example.com" items={emails} onChange={setEmails} />
+          </div>
+          <div className="sm:col-span-2">
+            <ValueListEditor label="Phones" placeholder="+1 555 0100" items={phones} onChange={setPhones} />
+          </div>
+          <div className="sm:col-span-2">
+            <AddressListEditor items={addresses} onChange={setAddresses} />
+          </div>
+
           <div className="sm:col-span-2">
             <Label htmlFor="d-notes">Notes</Label>
-            <Textarea id="d-notes" rows={4} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+            <Textarea id="d-notes" rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
           </div>
           <div className="flex items-center gap-3 sm:col-span-2">
             <Button type="submit" disabled={busy}>
@@ -165,6 +199,313 @@ export function ContactDetailPage() {
           </div>
         </form>
       </Card>
+
+      {data.latitude != null && data.longitude != null && (
+        <Card className="overflow-hidden">
+          <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
+            <MapPin size={15} /> {addresses[0]?.city || addresses[0]?.street || "Address location"}
+          </div>
+          <iframe
+            title="Address map"
+            className="h-64 w-full border-0"
+            loading="lazy"
+            src={mapSrc(data.latitude, data.longitude)}
+          />
+        </Card>
+      )}
+
+      <RelationshipsSection contactId={id} />
+      <LifeEventsSection contactId={id} />
     </div>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link
+      to="/contacts"
+      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+    >
+      <ArrowLeft size={16} /> Back
+    </Link>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value?: string | null;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function mapSrc(lat: number, lon: number): string {
+  const d = 0.01;
+  const bbox = `${lon - d},${lat - d},${lon + d},${lat + d}`;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(
+    bbox,
+  )}&layer=mapnik&marker=${lat},${lon}`;
+}
+
+function ValueListEditor({
+  label,
+  placeholder,
+  items,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  items: TypedValue[];
+  onChange: (v: TypedValue[]) => void;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="space-y-2">
+        {items.map((item, i) => (
+          <div key={i} className="flex gap-2">
+            <Input
+              className="w-28"
+              placeholder="type"
+              value={item.type}
+              onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)))}
+            />
+            <Input
+              className="flex-1"
+              placeholder={placeholder}
+              value={item.value}
+              onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
+            />
+            <button
+              type="button"
+              onClick={() => onChange(items.filter((_, j) => j !== i))}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        className="mt-1"
+        onClick={() => onChange([...items, { type: "home", value: "" }])}
+      >
+        <Plus size={14} /> Add {label.toLowerCase().replace(/s$/, "")}
+      </Button>
+    </div>
+  );
+}
+
+function AddressListEditor({
+  items,
+  onChange,
+}: {
+  items: AddressItem[];
+  onChange: (v: AddressItem[]) => void;
+}) {
+  const upd = (i: number, patch: Partial<AddressItem>) =>
+    onChange(items.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  return (
+    <div>
+      <Label>Addresses</Label>
+      <div className="space-y-3">
+        {items.map((a, i) => (
+          <div key={i} className="rounded-md border p-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input placeholder="Street" value={a.street} onChange={(e) => upd(i, { street: e.target.value })} />
+              <Input placeholder="City" value={a.city} onChange={(e) => upd(i, { city: e.target.value })} />
+              <Input placeholder="Region" value={a.region} onChange={(e) => upd(i, { region: e.target.value })} />
+              <Input placeholder="Postcode" value={a.code} onChange={(e) => upd(i, { code: e.target.value })} />
+              <Input placeholder="Country" value={a.country} onChange={(e) => upd(i, { country: e.target.value })} />
+            </div>
+            <button
+              type="button"
+              onClick={() => onChange(items.filter((_, j) => j !== i))}
+              className="mt-2 flex items-center gap-1 text-sm text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 size={14} /> Remove address
+            </button>
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        className="mt-1"
+        onClick={() =>
+          onChange([...items, { type: "home", street: "", city: "", region: "", code: "", country: "" }])
+        }
+      >
+        <Plus size={14} /> Add address (geocoded to a map)
+      </Button>
+    </div>
+  );
+}
+
+function RelationshipsSection({ contactId }: { contactId: number }) {
+  const qc = useQueryClient();
+  const { data: rels } = useQuery({
+    queryKey: ["relationships", contactId],
+    queryFn: () => api.get<RelatedContact[]>(`/api/contacts/${contactId}/relationships`),
+  });
+  const { data: contacts } = useQuery({ queryKey: ["contacts"], queryFn: () => api.get<Contact[]>("/api/contacts") });
+  const { data: types } = useQuery({
+    queryKey: ["relationship-types"],
+    queryFn: () => api.get<RelationshipType[]>("/api/relationship-types"),
+  });
+
+  const [other, setOther] = useState("");
+  const [typeId, setTypeId] = useState("");
+
+  async function add() {
+    if (!other || !typeId) return;
+    await api.post("/api/relationships", {
+      from_contact_id: contactId,
+      to_contact_id: Number(other),
+      type_id: Number(typeId),
+    });
+    setOther("");
+    setTypeId("");
+    await qc.invalidateQueries({ queryKey: ["relationships", contactId] });
+  }
+  async function remove(rid: number) {
+    await api.del(`/api/relationships/${rid}`);
+    await qc.invalidateQueries({ queryKey: ["relationships", contactId] });
+  }
+
+  const others = (contacts ?? []).filter((c) => c.id !== contactId);
+
+  return (
+    <Card className="p-5">
+      <div className="mb-3 font-medium">Relationships</div>
+      <div className="mb-3 flex flex-wrap gap-2">
+        {(rels ?? []).map((r) => (
+          <span key={r.relationship_id} className="flex items-center gap-1 rounded-full border px-3 py-1 text-sm">
+            <span className="text-muted-foreground">{r.label}:</span>
+            <Link to={`/contacts/${r.contact_id}`} className="hover:underline">
+              {r.contact_name}
+            </Link>
+            <button onClick={() => void remove(r.relationship_id)} className="text-muted-foreground hover:text-destructive">
+              <Trash2 size={13} />
+            </button>
+          </span>
+        ))}
+        {rels && rels.length === 0 && <span className="text-sm text-muted-foreground">No relationships yet.</span>}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="w-40">
+          <option value="">Relationship…</option>
+          {(types ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </Select>
+        <Select value={other} onChange={(e) => setOther(e.target.value)} className="w-48">
+          <option value="">Who…</option>
+          {others.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.display_name}
+            </option>
+          ))}
+        </Select>
+        <Button type="button" variant="secondary" onClick={() => void add()}>
+          Link
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function LifeEventsSection({ contactId }: { contactId: number }) {
+  const qc = useQueryClient();
+  const { data: events } = useQuery({
+    queryKey: ["life-events", contactId],
+    queryFn: () => api.get<LifeEvent[]>(`/api/contacts/${contactId}/life-events`),
+  });
+  const { data: types } = useQuery({
+    queryKey: ["life-event-types"],
+    queryFn: () => api.get<LifeEventType[]>("/api/life-event-types"),
+  });
+
+  const [title, setTitle] = useState("");
+  const [emoji, setEmoji] = useState("");
+  const [date, setDate] = useState("");
+  const [note, setNote] = useState("");
+
+  function pick(t: LifeEventType) {
+    setTitle(t.name);
+    setEmoji(t.emoji ?? "");
+  }
+  async function add() {
+    if (!title) return;
+    await api.post("/api/life-events", {
+      contact_id: contactId,
+      title,
+      emoji: emoji || null,
+      happened_on: date || null,
+      note: note || null,
+    });
+    setTitle("");
+    setEmoji("");
+    setDate("");
+    setNote("");
+    await qc.invalidateQueries({ queryKey: ["life-events", contactId] });
+  }
+  async function remove(eid: number) {
+    await api.del(`/api/life-events/${eid}`);
+    await qc.invalidateQueries({ queryKey: ["life-events", contactId] });
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-3 font-medium">Life events</div>
+      <ul className="mb-4 space-y-2">
+        {(events ?? []).map((ev) => (
+          <li key={ev.id} className="flex items-center gap-2 text-sm">
+            <span className="text-lg">{ev.emoji || "•"}</span>
+            <span className="font-medium">{ev.title}</span>
+            {ev.happened_on && <span className="text-muted-foreground">{ev.happened_on}</span>}
+            {ev.note && <span className="text-muted-foreground">— {ev.note}</span>}
+            <button onClick={() => void remove(ev.id)} className="ml-auto text-muted-foreground hover:text-destructive">
+              <Trash2 size={14} />
+            </button>
+          </li>
+        ))}
+        {events && events.length === 0 && <li className="text-sm text-muted-foreground">No life events yet.</li>}
+      </ul>
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {(types ?? []).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => pick(t)}
+            className="rounded-full border px-2.5 py-1 text-sm text-muted-foreground transition hover:bg-accent"
+          >
+            {t.emoji} {t.name}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input className="w-16" placeholder="🎉" value={emoji} onChange={(e) => setEmoji(e.target.value)} />
+        <Input className="w-48" placeholder="What happened" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <Input className="w-40" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Input className="flex-1" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+        <Button type="button" variant="secondary" onClick={() => void add()}>
+          Add
+        </Button>
+      </div>
+    </Card>
   );
 }

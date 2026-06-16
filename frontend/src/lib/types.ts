@@ -54,9 +54,39 @@ export interface Contact {
   addresses: AddressItem[];
   visibility: Visibility;
   group_id?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
   nextcloud_uid?: string | null;
   last_synced_at?: string | null;
   dirty: boolean;
+}
+
+export interface RelationshipType {
+  id: number;
+  name: string;
+  reverse_name?: string | null;
+}
+
+export interface RelatedContact {
+  relationship_id: number;
+  contact_id: number;
+  contact_name: string;
+  label: string;
+}
+
+export interface LifeEventType {
+  id: number;
+  name: string;
+  emoji?: string | null;
+}
+
+export interface LifeEvent {
+  id: number;
+  contact_id: number;
+  title: string;
+  emoji?: string | null;
+  happened_on?: string | null;
+  note?: string | null;
 }
 
 export interface SyncResult {

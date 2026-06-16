@@ -30,6 +30,11 @@ the people in your life. One source of truth (Nextcloud), many views.
 - **Nextcloud-backed contacts.** Your CardDAV address book is the source of
   truth. Prism mirrors it, lets you manage contacts with a rich UI, and writes
   changes back. Your phone and desktop keep seeing the same contacts.
+- **Rich contact profiles.** Full vCard data — multiple emails/phones/addresses,
+  birthday (with age), organization/title — all syncing back to Nextcloud. Plus
+  a map of the contact's address and Prism-side enrichment: customizable
+  **relationships** (partner / parent / …) and **life events** (got married,
+  moved house, …), with per-user editable catalogs.
 - **Events with optional cost.** Log get-togethers, attach attendees (contacts
   and/or users), and record what an outing cost.
 - **Reminders into your Nextcloud calendar.** Events and reminders are pushed as

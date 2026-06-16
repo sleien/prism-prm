@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, Plus, RefreshCw } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
@@ -9,6 +9,7 @@ import { visibilityStyles } from "@/lib/contacts";
 
 export function ContactsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: contacts, isLoading, error } = useQuery({
     queryKey: ["contacts"],
     queryFn: () => api.get<Contact[]>("/api/contacts"),
@@ -30,7 +31,7 @@ export function ContactsPage() {
     setFormErr(null);
     setBusy(true);
     try {
-      await api.post<Contact>("/api/contacts", {
+      const created = await api.post<Contact>("/api/contacts", {
         display_name: name,
         emails: email ? [{ type: "home", value: email }] : [],
         visibility,
@@ -41,6 +42,7 @@ export function ContactsPage() {
       setVisibility("public");
       setShowForm(false);
       await qc.invalidateQueries({ queryKey: ["contacts"] });
+      navigate(`/contacts/${created.id}`); // open the detail page to add more
     } catch (err) {
       setFormErr(err instanceof ApiError ? err.message : "Could not create contact");
     } finally {

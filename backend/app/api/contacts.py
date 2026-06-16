@@ -20,6 +20,7 @@ from app.db import get_session
 from app.integrations.nextcloud import DavError, NextcloudClient
 from app.models import Contact, User
 from app.schemas.contact import ContactCreate, ContactOut, ContactUpdate
+from app.services.geocode import geocode_contact
 from app.services.sync import SyncResult, sync_contacts
 from app.visibility import validate_group_choice, visibility_filter
 
@@ -79,6 +80,7 @@ async def create_contact(
         **data,
     )
     session.add(contact)
+    await geocode_contact(contact)
     await session.commit()
     await session.refresh(contact)
     return contact
@@ -99,6 +101,8 @@ async def update_contact(
     for key, value in updates.items():
         setattr(contact, key, value)
     await validate_group_choice(session, user, contact.visibility, contact.group_id)
+    if "addresses" in updates:
+        await geocode_contact(contact)
     contact.dirty = True
     await session.commit()
     await session.refresh(contact)

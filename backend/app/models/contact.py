@@ -51,6 +51,10 @@ class Contact(Base, TimestampMixin):
     birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Geocoded from the primary address (for the map widget).
+    latitude: Mapped[float | None] = mapped_column(nullable=True)
+    longitude: Mapped[float | None] = mapped_column(nullable=True)
+
     # Lists of {"type": ..., "value": ...} objects.
     emails: Mapped[list] = mapped_column(JSONType, default=list, nullable=False)
     phones: Mapped[list] = mapped_column(JSONType, default=list, nullable=False)

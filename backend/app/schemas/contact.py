@@ -62,6 +62,8 @@ class ContactOut(ContactBase):
 
     id: int
     owner_id: int
+    latitude: float | None = None
+    longitude: float | None = None
     nextcloud_uid: str | None = None
     last_synced_at: datetime | None = None
     dirty: bool = False
