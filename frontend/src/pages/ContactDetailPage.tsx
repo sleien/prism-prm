@@ -454,9 +454,16 @@ function AddressListEditor({
 function TagEditor({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
   const { data: catalog } = useQuery({ queryKey: ["tags"], queryFn: () => api.get<Tag[]>("/api/tags") });
   const [input, setInput] = useState("");
+  const [open, setOpen] = useState(false);
 
   const colorOf = (name: string) =>
     catalog?.find((c) => c.name.toLowerCase() === name.toLowerCase())?.color ?? undefined;
+
+  const q = input.trim().toLowerCase();
+  const suggestions = (catalog ?? [])
+    .filter((c) => !tags.some((t) => t.toLowerCase() === c.name.toLowerCase()))
+    .filter((c) => !q || c.name.toLowerCase().includes(q))
+    .slice(0, 8);
 
   function add(name: string) {
     const n = name.trim();
@@ -487,25 +494,50 @@ function TagEditor({ tags, onChange }: { tags: string[]; onChange: (t: string[])
         ))}
         {tags.length === 0 && <span className="text-sm text-muted-foreground">No tags.</span>}
       </div>
-      <Input
-        className="max-w-xs"
-        list="tag-suggestions"
-        placeholder="Add tag…"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            add(input);
-          }
-        }}
-        onBlur={() => add(input)}
-      />
-      <datalist id="tag-suggestions">
-        {(catalog ?? []).map((c) => (
-          <option key={c.id} value={c.name} />
-        ))}
-      </datalist>
+      <div className="relative max-w-xs">
+        <Input
+          placeholder="Add tag…"
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              add(input);
+            } else if (e.key === "Escape") {
+              setOpen(false);
+            }
+          }}
+        />
+        {open && suggestions.length > 0 && (
+          <ul className="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-md border bg-[hsl(var(--card))] py-1 shadow-lg">
+            {suggestions.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  // mousedown (not click) fires before the input blur, so the
+                  // selection registers before the dropdown closes.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    add(c.name);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: c.color ?? "hsl(var(--muted-foreground))" }}
+                  />
+                  {c.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
