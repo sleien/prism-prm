@@ -82,6 +82,7 @@ export function ContactDetailPage() {
       job_title: form.job_title,
       birthday: form.birthday || null,
       notes: form.notes,
+      gender: form.gender ?? null,
       visibility: form.visibility,
       linked_user_id: form.linked_user_id ?? null,
       emails: emails.filter((x) => x.value),
@@ -171,6 +172,19 @@ export function ContactDetailPage() {
           <Field label="Last name" value={form.last_name} onChange={(v) => set("last_name", v)} />
           <Field label="Organization" value={form.organization} onChange={(v) => set("organization", v)} />
           <Field label="Job title" value={form.job_title} onChange={(v) => set("job_title", v)} />
+          <div>
+            <Label htmlFor="d-gender">Gender</Label>
+            <Select
+              id="d-gender"
+              value={form.gender ?? ""}
+              onChange={(e) => set("gender", (e.target.value || null) as Contact["gender"])}
+            >
+              <option value="">— unspecified —</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+              <option value="other">Other</option>
+            </Select>
+          </div>
           <div>
             <Label htmlFor="d-bday">Birthday</Label>
             <div className="flex items-center gap-2">

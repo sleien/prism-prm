@@ -36,6 +36,42 @@ async def test_relationship_types_seeded_and_directional(client):
 
 
 @pytest.mark.asyncio
+async def test_relationship_labels_are_gendered_by_related_contact(client):
+    await _register(client, "a@example.com", "A")
+    parent = next(
+        t for t in (await client.get("/api/relationship-types")).json() if t["name"] == "Parent"
+    )
+    # ada (female) is the "Child" side; byron (male) is the "Parent" side.
+    ada = (
+        await client.post("/api/contacts", json={"display_name": "Ada", "gender": "female"})
+    ).json()["id"]
+    byron = (
+        await client.post("/api/contacts", json={"display_name": "Byron", "gender": "male"})
+    ).json()["id"]
+    await client.post(
+        "/api/relationships",
+        json={"from_contact_id": ada, "to_contact_id": byron, "type_id": parent["id"]},
+    )
+    # From ada's view the related person (byron, male) reads as "Father".
+    assert (await client.get(f"/api/contacts/{ada}/relationships")).json()[0]["label"] == "Father"
+    # From byron's view the related person (ada, female) reads as "Daughter".
+    assert (await client.get(f"/api/contacts/{byron}/relationships")).json()[0]["label"] == "Daughter"
+
+    # A contact with no gender keeps the generic label.
+    cleo = (await client.post("/api/contacts", json={"display_name": "Cleo"})).json()["id"]
+    await client.post(
+        "/api/relationships",
+        json={"from_contact_id": ada, "to_contact_id": cleo, "type_id": parent["id"]},
+    )
+    cleo_label = next(
+        r["label"]
+        for r in (await client.get(f"/api/contacts/{ada}/relationships")).json()
+        if r["contact_id"] == cleo
+    )
+    assert cleo_label == "Parent"
+
+
+@pytest.mark.asyncio
 async def test_relationship_to_self_rejected(client):
     await _register(client, "a@example.com", "A")
     types = (await client.get("/api/relationship-types")).json()

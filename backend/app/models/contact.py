@@ -55,6 +55,9 @@ class Contact(Base, TimestampMixin):
     job_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # "male" | "female" | "other"; NULL = unspecified. Drives gendered
+    # relationship labels (e.g. a male "Parent" reads "Father").
+    gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Geocoded from the primary address (for the map widget).
     latitude: Mapped[float | None] = mapped_column(nullable=True)

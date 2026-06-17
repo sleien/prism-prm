@@ -46,6 +46,15 @@ def _addresses(component: Any) -> list[dict[str, str]]:
     return out
 
 
+def _parse_gender(value: Any) -> str | None:
+    """vCard 4.0 GENDER sex component -> Prism gender. M/F/O map across; N/U/empty
+    (and the structured `;identity` suffix) yield unspecified."""
+    if not value:
+        return None
+    sex = str(value).strip().split(";", 1)[0].strip().upper()
+    return {"M": "male", "F": "female", "O": "other"}.get(sex)
+
+
 def _parse_bday(value: Any) -> date | None:
     if not value:
         return None
@@ -90,6 +99,7 @@ def parse_vcard(text: str) -> dict[str, Any]:
         "organization": org_value,
         "job_title": val("title"),
         "birthday": _parse_bday(getattr(getattr(card, "bday", None), "value", None)),
+        "gender": _parse_gender(getattr(getattr(card, "gender", None), "value", None)),
         "notes": val("note"),
         "emails": _typed_list(card, "email"),
         "phones": _typed_list(card, "tel"),
@@ -142,6 +152,9 @@ def build_vcard(contact: Any, existing_text: str | None = None) -> str:
     if contact.birthday:
         reset("bday")
         card.add("bday").value = contact.birthday.isoformat()
+    reset("gender")
+    if getattr(contact, "gender", None):
+        card.add("gender").value = {"male": "M", "female": "F", "other": "O"}[contact.gender]
     if contact.notes:
         reset("note")
         card.add("note").value = contact.notes

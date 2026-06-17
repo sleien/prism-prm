@@ -18,6 +18,14 @@ class Visibility(StrEnum):
     PRIVATE = "private"
 
 
+class Gender(StrEnum):
+    """A contact's gender. NULL (unset) means unspecified."""
+
+    MALE = "male"
+    FEMALE = "female"
+    OTHER = "other"
+
+
 class Cadence(StrEnum):
     DAILY = "daily"
     WEEKLY = "weekly"

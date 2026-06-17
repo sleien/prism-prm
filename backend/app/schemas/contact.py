@@ -6,7 +6,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.constants import Visibility
+from app.constants import Gender, Visibility
 
 
 class TypedValue(BaseModel):
@@ -31,6 +31,7 @@ class ContactBase(BaseModel):
     job_title: str | None = Field(default=None, max_length=200)
     birthday: date | None = None
     notes: str | None = None
+    gender: Gender | None = None
     emails: list[TypedValue] = Field(default_factory=list)
     phones: list[TypedValue] = Field(default_factory=list)
     addresses: list[AddressItem] = Field(default_factory=list)
@@ -51,6 +52,7 @@ class ContactUpdate(BaseModel):
     job_title: str | None = Field(default=None, max_length=200)
     birthday: date | None = None
     notes: str | None = None
+    gender: Gender | None = None
     emails: list[TypedValue] | None = None
     phones: list[TypedValue] | None = None
     addresses: list[AddressItem] | None = None

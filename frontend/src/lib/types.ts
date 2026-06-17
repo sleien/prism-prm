@@ -58,6 +58,7 @@ export interface Contact {
   job_title?: string | null;
   birthday?: string | null;
   notes?: string | null;
+  gender?: "male" | "female" | "other" | null;
   emails: TypedValue[];
   phones: TypedValue[];
   addresses: AddressItem[];

@@ -38,6 +38,25 @@ from app.visibility import visibility_filter
 
 router = APIRouter(tags=["enrichment"])
 
+# Display-only: a generic relationship label is shown in its gendered form based
+# on the *related* contact's gender (e.g. a male "Parent" reads "Father"). Keyed
+# by lower-cased base label -> (male, female). Symmetric/neutral labels (Partner,
+# Friend, Colleague, Relative, ...) are absent and shown unchanged.
+_GENDERED_LABELS: dict[str, tuple[str, str]] = {
+    "parent": ("Father", "Mother"),
+    "child": ("Son", "Daughter"),
+    "sibling": ("Brother", "Sister"),
+    "grandparent": ("Grandfather", "Grandmother"),
+    "grandchild": ("Grandson", "Granddaughter"),
+}
+
+
+def _gendered_label(label: str, gender: str | None) -> str:
+    pair = _GENDERED_LABELS.get(label.lower())
+    if pair is None or gender not in ("male", "female"):
+        return label
+    return pair[0] if gender == "male" else pair[1]
+
 _DEFAULT_RELATIONSHIP_TYPES = [
     ("Partner", None),
     ("Parent", "Child"),
@@ -158,7 +177,7 @@ async def list_relationships(
                 relationship_id=rel.id,
                 contact_id=other_id,
                 contact_name=(other.display_name if other else "Unknown"),
-                label=label,
+                label=_gendered_label(label, other.gender if other else None),
             )
         )
     return out

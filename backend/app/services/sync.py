@@ -38,6 +38,7 @@ _PARSED_FIELDS = (
     "job_title",
     "birthday",
     "notes",
+    "gender",
     "emails",
     "phones",
     "addresses",

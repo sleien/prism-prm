@@ -69,6 +69,28 @@ async def test_update_then_delete(client):
 
 
 @pytest.mark.asyncio
+async def test_gender_round_trips_and_validates(client):
+    await _register(client, "a@example.com", "A")
+    created = await client.post(
+        "/api/contacts", json={"display_name": "Grace", "gender": "female"}
+    )
+    assert created.status_code == 201, created.text
+    cid = created.json()["id"]
+    assert created.json()["gender"] == "female"
+
+    assert (await client.patch(f"/api/contacts/{cid}", json={"gender": "male"})).json()[
+        "gender"
+    ] == "male"
+    # Explicit null clears it back to unspecified.
+    assert (await client.patch(f"/api/contacts/{cid}", json={"gender": None})).json()[
+        "gender"
+    ] is None
+    # Unknown values are rejected.
+    bad = await client.post("/api/contacts", json={"display_name": "X", "gender": "yes"})
+    assert bad.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_sync_without_nextcloud_is_skipped(client):
     await _register(client, "a@example.com", "A")
     resp = await client.post("/api/contacts/sync")
