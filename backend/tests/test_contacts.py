@@ -91,6 +91,20 @@ async def test_gender_round_trips_and_validates(client):
 
 
 @pytest.mark.asyncio
+async def test_telegram_round_trips(client):
+    await _register(client, "a@example.com", "A")
+    created = await client.post(
+        "/api/contacts", json={"display_name": "Grace", "telegram": "graceh"}
+    )
+    assert created.status_code == 201, created.text
+    cid = created.json()["id"]
+    assert created.json()["telegram"] == "graceh"
+    assert (await client.patch(f"/api/contacts/{cid}", json={"telegram": None})).json()[
+        "telegram"
+    ] is None
+
+
+@pytest.mark.asyncio
 async def test_new_contact_is_public_by_default(client):
     await _register(client, "a@example.com", "A")
     body = (await client.post("/api/contacts", json={"display_name": "Pat"})).json()

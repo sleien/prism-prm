@@ -55,6 +55,18 @@ def _parse_gender(value: Any) -> str | None:
     return {"M": "male", "F": "female", "O": "other"}.get(sex)
 
 
+def _telegram_handle(value: Any) -> str | None:
+    """Normalize a Telegram value to a bare handle (no t.me/ URL, no leading @)."""
+    if not value:
+        return None
+    text = str(value).strip()
+    for prefix in ("https://t.me/", "http://t.me/", "t.me/"):
+        if text.lower().startswith(prefix):
+            text = text[len(prefix):]
+            break
+    return text.lstrip("@").strip() or None
+
+
 def _parse_bday(value: Any) -> date | None:
     if not value:
         return None
@@ -102,6 +114,7 @@ def parse_vcard(text: str) -> dict[str, Any]:
         "job_title": val("title"),
         "birthday": _parse_bday(getattr(getattr(card, "bday", None), "value", None)),
         "gender": _parse_gender(getattr(getattr(card, "gender", None), "value", None)),
+        "telegram": _telegram_handle(val("x_telegram")),
         "notes": val("note"),
         "emails": _typed_list(card, "email"),
         "phones": _typed_list(card, "tel"),
@@ -159,6 +172,9 @@ def build_vcard(contact: Any, existing_text: str | None = None) -> str:
     reset("gender")
     if getattr(contact, "gender", None):
         card.add("gender").value = {"male": "M", "female": "F", "other": "O"}[contact.gender]
+    reset("x_telegram")
+    if getattr(contact, "telegram", None):
+        card.add("x-telegram").value = contact.telegram
     if contact.notes:
         reset("note")
         card.add("note").value = contact.notes

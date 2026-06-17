@@ -40,6 +40,7 @@ _PARSED_FIELDS = (
     "birthday",
     "notes",
     "gender",
+    "telegram",
     "emails",
     "phones",
     "addresses",

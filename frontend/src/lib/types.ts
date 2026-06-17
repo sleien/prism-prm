@@ -68,6 +68,7 @@ export interface Contact {
   birthday?: string | null;
   notes?: string | null;
   gender?: "male" | "female" | "other" | null;
+  telegram?: string | null;
   emails: TypedValue[];
   phones: TypedValue[];
   addresses: AddressItem[];

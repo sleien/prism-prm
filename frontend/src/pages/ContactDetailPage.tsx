@@ -87,6 +87,7 @@ export function ContactDetailPage() {
       birthday: form.birthday || null,
       notes: form.notes,
       gender: form.gender ?? null,
+      telegram: form.telegram?.trim() ? form.telegram.trim().replace(/^@/, "") : null,
       visibility: form.visibility,
       linked_user_id: form.linked_user_id ?? null,
       emails: emails.filter((x) => x.value),
@@ -180,6 +181,25 @@ export function ContactDetailPage() {
           <Field label="Last name" value={form.last_name} onChange={(v) => set("last_name", v)} />
           <Field label="Organization" value={form.organization} onChange={(v) => set("organization", v)} />
           <Field label="Job title" value={form.job_title} onChange={(v) => set("job_title", v)} />
+          <div>
+            <Label htmlFor="d-tg">Telegram</Label>
+            <Input
+              id="d-tg"
+              value={form.telegram ?? ""}
+              onChange={(e) => set("telegram", e.target.value)}
+              placeholder="username"
+            />
+            {form.telegram?.trim() && (
+              <a
+                href={`https://t.me/${form.telegram.trim().replace(/^@/, "")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-block text-xs text-primary hover:underline"
+              >
+                t.me/{form.telegram.trim().replace(/^@/, "")} ↗
+              </a>
+            )}
+          </div>
           <div>
             <Label htmlFor="d-gender">Gender</Label>
             <Select

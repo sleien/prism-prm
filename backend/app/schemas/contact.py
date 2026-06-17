@@ -41,6 +41,7 @@ class ContactBase(BaseModel):
     birthday: date | None = None
     notes: str | None = None
     gender: Gender | None = None
+    telegram: str | None = Field(default=None, max_length=100)
     emails: list[TypedValue] = Field(default_factory=list)
     phones: list[TypedValue] = Field(default_factory=list)
     addresses: list[AddressItem] = Field(default_factory=list)
@@ -64,6 +65,7 @@ class ContactUpdate(BaseModel):
     birthday: date | None = None
     notes: str | None = None
     gender: Gender | None = None
+    telegram: str | None = Field(default=None, max_length=100)
     emails: list[TypedValue] | None = None
     phones: list[TypedValue] | None = None
     addresses: list[AddressItem] | None = None

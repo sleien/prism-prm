@@ -130,6 +130,18 @@ def split_multi(value: str | None) -> list[str]:
     return [p.strip() for p in value.split(":::") if p.strip()]
 
 
+def telegram_handle(value: str | None) -> str | None:
+    """Normalize a Telegram value to a bare handle (no t.me/ URL, no leading @)."""
+    if not value:
+        return None
+    text = value.strip()
+    for prefix in ("https://t.me/", "http://t.me/", "t.me/"):
+        if text.lower().startswith(prefix):
+            text = text[len(prefix):]
+            break
+    return text.lstrip("@").strip() or None
+
+
 # --------------------------------------------------------------------------- #
 # Records
 # --------------------------------------------------------------------------- #
@@ -148,6 +160,7 @@ class Person:
     notes: str | None = None
     nickname: str | None = None
     gender: str | None = None
+    telegram: str | None = None
     tags: list[str] = field(default_factory=list)
     monica_id: int | None = None
     sources: set[str] = field(default_factory=set)
@@ -214,8 +227,16 @@ def parse_google_csv(path: Path) -> tuple[list[Person], list[dict]]:
                     "country": country,
                 })
 
+            telegram = None
+            for n in (1, 2):
+                if "telegram" in (row.get(f"Website {n} - Label") or "").lower():
+                    telegram = telegram_handle(row.get(f"Website {n} - Value"))
+                    if telegram:
+                        break
+
             people.append(Person(
                 first=first, middle=middle, last=last, display=display,
+                telegram=telegram,
                 emails=emails, phones=phones, addresses=addresses,
                 birthday=clean_birthday(row.get("Birthday")),
                 organization=(row.get("Organization Name") or "").strip() or None,
@@ -323,14 +344,19 @@ def parse_monica(path: Path) -> tuple[dict[int, Person], list[tuple[str, int, in
         name = genders.get(int(gid), "")
         return {"man": "male", "woman": "female"}.get(name)
 
-    # contact fields -> emails / phones, keyed by contact_id
-    ftypes = {int(t["id"]): (t.get("type") or "").lower() for t in _parse_insert(text, "contact_field_types")}
+    # contact fields -> emails / phones / telegram, keyed by contact_id
+    field_types = _parse_insert(text, "contact_field_types")
+    ftypes = {int(t["id"]): (t.get("type") or "").lower() for t in field_types}
+    tg_type_ids = {int(t["id"]) for t in field_types if (t.get("name") or "").lower() == "telegram"}
     fields_by_contact: dict[int, dict[str, list[str]]] = {}
     for f in _parse_insert(text, "contact_fields"):
         cid = int(f["contact_id"])
-        kind = ftypes.get(int(f["contact_field_type_id"]), "")
+        fid = int(f["contact_field_type_id"])
+        kind = ftypes.get(fid, "")
         if kind in ("email", "phone") and f.get("data"):
             fields_by_contact.setdefault(cid, {}).setdefault(kind, []).append(f["data"])
+        elif fid in tg_type_ids and f.get("data"):
+            fields_by_contact.setdefault(cid, {}).setdefault("telegram", []).append(f["data"])
 
     # birthdays: special_dates referenced by contacts.birthday_special_date_id
     sdates = {
@@ -348,6 +374,7 @@ def parse_monica(path: Path) -> tuple[dict[int, Person], list[tuple[str, int, in
         last = (c.get("last_name") or "").strip()
         emails = [{"type": "home", "value": v} for v in fields_by_contact.get(cid, {}).get("email", [])]
         phones = [{"type": "cell", "value": v} for v in fields_by_contact.get(cid, {}).get("phone", [])]
+        tg = next((telegram_handle(v) for v in fields_by_contact.get(cid, {}).get("telegram", [])), None)
         bday = None
         sd_id = c.get("birthday_special_date_id")
         if sd_id and int(sd_id) in sdates:
@@ -363,6 +390,7 @@ def parse_monica(path: Path) -> tuple[dict[int, Person], list[tuple[str, int, in
             notes=(c.get("description") or None),
             nickname=(c.get("nickname") or None),
             gender=gender_of(c.get("gender_id")),
+            telegram=tg,
             monica_id=cid,
             sources={"monica"},
         )
@@ -461,6 +489,7 @@ def merge(google: list[Person], monica: dict[int, Person]) -> tuple[list[Person]
             tgt.notes = tgt.notes or m.notes
             tgt.nickname = tgt.nickname or m.nickname
             tgt.middle = tgt.middle or m.middle
+            tgt.telegram = tgt.telegram or m.telegram
             tgt.tags = list(dict.fromkeys(tgt.tags + m.tags))
             _merge_typed(tgt.emails, m.emails)
             _merge_typed(tgt.phones, m.phones)
@@ -488,6 +517,7 @@ def merge(google: list[Person], monica: dict[int, Person]) -> tuple[list[Person]
             tgt.middle = tgt.middle or g.middle
             tgt.last = tgt.last or g.last
             tgt.display = tgt.display or g.display
+            tgt.telegram = g.telegram or tgt.telegram
             tgt.sources |= g.sources
         else:
             by_key[key] = g
@@ -546,6 +576,7 @@ def contact_payload(p: Person) -> dict:
         "birthday": p.birthday,
         "notes": p.notes,
         "gender": p.gender,
+        "telegram": p.telegram,
         "emails": p.emails,
         "phones": p.phones,
         "addresses": p.addresses,
