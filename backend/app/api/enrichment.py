@@ -35,6 +35,7 @@ from app.schemas.enrichment import (
     RelationshipCreate,
     RelationshipTypeIn,
     RelationshipTypeOut,
+    RelationshipTypeUpdate,
     TagCatalogOut,
     TagIn,
     TagUpdate,
@@ -44,10 +45,9 @@ from app.visibility import visibility_filter
 
 router = APIRouter(tags=["enrichment"])
 
-# Display-only: a generic relationship label is shown in its gendered form based
-# on the *related* contact's gender (e.g. a male "Parent" reads "Father"). Keyed
-# by lower-cased base label -> (male, female). Symmetric/neutral labels (Partner,
-# Friend, Colleague, Relative, ...) are absent and shown unchanged.
+# Built-in fallback for the gendered form of a label, used when a relationship
+# type has no explicit male/female override set. Keyed by lower-cased base
+# label -> (male, female).
 _GENDERED_LABELS: dict[str, tuple[str, str]] = {
     "parent": ("Father", "Mother"),
     "child": ("Son", "Daughter"),
@@ -57,20 +57,28 @@ _GENDERED_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
-def _gendered_label(label: str, gender: str | None) -> str:
-    pair = _GENDERED_LABELS.get(label.lower())
-    if pair is None or gender not in ("male", "female"):
-        return label
-    return pair[0] if gender == "male" else pair[1]
+def _gendered_label(
+    base: str, gender: str | None, male: str | None = None, female: str | None = None
+) -> str:
+    """Render `base` in its gendered form for `gender`, preferring the explicit
+    `male`/`female` overrides (from the relationship type), then the built-in
+    fallback, then the neutral label."""
+    fb = _GENDERED_LABELS.get(base.lower(), (None, None))
+    if gender == "male":
+        return male or fb[0] or base
+    if gender == "female":
+        return female or fb[1] or base
+    return base
 
+# (name, reverse_name, name_male, name_female, reverse_name_male, reverse_name_female)
 _DEFAULT_RELATIONSHIP_TYPES = [
-    ("Partner", None),
-    ("Parent", "Child"),
-    ("Sibling", None),
-    ("Grandparent", "Grandchild"),
-    ("Friend", None),
-    ("Colleague", None),
-    ("Relative", None),
+    ("Partner", None, None, None, None, None),
+    ("Parent", "Child", "Father", "Mother", "Son", "Daughter"),
+    ("Sibling", None, "Brother", "Sister", None, None),
+    ("Grandparent", "Grandchild", "Grandfather", "Grandmother", "Grandson", "Granddaughter"),
+    ("Friend", None, None, None, None, None),
+    ("Colleague", None, None, None, None, None),
+    ("Relative", None, None, None, None, None),
 ]
 _DEFAULT_LIFE_EVENT_TYPES = [
     ("Got married", "💍"),
@@ -114,8 +122,16 @@ async def list_relationship_types(
     )
     if not rows:
         rows = [
-            RelationshipType(owner_id=user.id, name=name, reverse_name=rev)
-            for name, rev in _DEFAULT_RELATIONSHIP_TYPES
+            RelationshipType(
+                owner_id=user.id,
+                name=name,
+                reverse_name=rev,
+                name_male=nm,
+                name_female=nf,
+                reverse_name_male=rm,
+                reverse_name_female=rf,
+            )
+            for name, rev, nm, nf, rm, rf in _DEFAULT_RELATIONSHIP_TYPES
         ]
         session.add_all(rows)
         await session.commit()
@@ -130,8 +146,29 @@ async def create_relationship_type(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> RelationshipType:
-    rt = RelationshipType(owner_id=user.id, name=payload.name, reverse_name=payload.reverse_name)
+    rt = RelationshipType(owner_id=user.id, **payload.model_dump())
     session.add(rt)
+    await session.commit()
+    await session.refresh(rt)
+    return rt
+
+
+@router.patch("/relationship-types/{type_id}", response_model=RelationshipTypeOut)
+async def update_relationship_type(
+    type_id: int,
+    payload: RelationshipTypeUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> RelationshipType:
+    rt = await session.get(RelationshipType, type_id)
+    if rt is None or rt.owner_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Relationship type not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "name" in updates and not (updates["name"] or "").strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Name required")
+    for key, value in updates.items():
+        # Empty strings clear an optional gendered/reverse label back to null.
+        setattr(rt, key, (value or None) if key != "name" else value.strip())
     await session.commit()
     await session.refresh(rt)
     return rt
@@ -171,19 +208,36 @@ async def list_relationships(
             )
         )
     ).all()
+    # The owner's type catalog, keyed by neutral name, supplies the editable
+    # gendered overrides for each relationship's denormalized labels.
+    types = {
+        t.name: t
+        for t in await session.scalars(
+            select(RelationshipType).where(RelationshipType.owner_id == user.id)
+        )
+    }
     out: list[RelatedContactOut] = []
     for rel in rows:
+        rtype = types.get(rel.name)
         if rel.from_contact_id == contact_id:
-            other_id, label = rel.to_contact_id, rel.name
-        else:
-            other_id, label = rel.from_contact_id, (rel.reverse_name or rel.name)
+            other_id, base = rel.to_contact_id, rel.name
+            male = rtype.name_male if rtype else None
+            female = rtype.name_female if rtype else None
+        elif rel.reverse_name:
+            other_id, base = rel.from_contact_id, rel.reverse_name
+            male = rtype.reverse_name_male if rtype else None
+            female = rtype.reverse_name_female if rtype else None
+        else:  # symmetric (no reverse label) — gender the neutral name
+            other_id, base = rel.from_contact_id, rel.name
+            male = rtype.name_male if rtype else None
+            female = rtype.name_female if rtype else None
         other = await session.get(Contact, other_id)
         out.append(
             RelatedContactOut(
                 relationship_id=rel.id,
                 contact_id=other_id,
                 contact_name=(other.display_name if other else "Unknown"),
-                label=_gendered_label(label, other.gender if other else None),
+                label=_gendered_label(base, other.gender if other else None, male, female),
             )
         )
     return out

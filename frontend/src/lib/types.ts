@@ -85,6 +85,10 @@ export interface RelationshipType {
   id: number;
   name: string;
   reverse_name?: string | null;
+  name_male?: string | null;
+  name_female?: string | null;
+  reverse_name_male?: string | null;
+  reverse_name_female?: string | null;
 }
 
 export interface RelatedContact {

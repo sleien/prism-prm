@@ -27,6 +27,13 @@ class RelationshipType(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     # Label seen from the other side. Null/equal => symmetric (e.g. Sibling).
     reverse_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # Editable gendered variants used to render labels by the related contact's
+    # gender (e.g. Parent -> Father/Mother, reverse Child -> Son/Daughter). Null
+    # falls back to the neutral name.
+    name_male: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    name_female: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    reverse_name_male: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    reverse_name_female: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
 
 class ContactRelationship(Base, TimestampMixin):

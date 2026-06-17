@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { Contact, JournalTemplate, Tag, UserOut } from "@/lib/types";
+import type { Contact, JournalTemplate, RelationshipType, Tag, UserOut } from "@/lib/types";
 import { useAuth } from "@/auth/AuthContext";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 
@@ -250,13 +250,7 @@ export function SettingsPage() {
         )}
       </Card>
 
-      <TypeCatalog
-        title="Relationship types"
-        description="The relationship kinds offered when linking contacts."
-        endpoint="/api/relationship-types"
-        queryKey="relationship-types"
-        kind="relation"
-      />
+      <RelationshipTypeManager />
       <TypeCatalog
         title="Life-event types"
         description="The milestone presets offered on a contact's timeline."
@@ -272,6 +266,118 @@ export function SettingsPage() {
         kind="emoji"
       />
       <TagManager />
+    </div>
+  );
+}
+
+type RelField =
+  | "name"
+  | "reverse_name"
+  | "name_male"
+  | "name_female"
+  | "reverse_name_male"
+  | "reverse_name_female";
+
+function RelationshipTypeManager() {
+  const qc = useQueryClient();
+  const { data: types } = useQuery({
+    queryKey: ["relationship-types"],
+    queryFn: () => api.get<RelationshipType[]>("/api/relationship-types"),
+  });
+  const [name, setName] = useState("");
+  const [reverse, setReverse] = useState("");
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ["relationship-types"] });
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    await api.post("/api/relationship-types", {
+      name: name.trim(),
+      reverse_name: reverse.trim() || null,
+    });
+    setName("");
+    setReverse("");
+    await refresh();
+  }
+  async function patch(id: number, field: RelField, value: string) {
+    await api.patch(`/api/relationship-types/${id}`, { [field]: value });
+    await refresh();
+  }
+  async function remove(id: number) {
+    await api.del(`/api/relationship-types/${id}`);
+    await refresh();
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-1 font-medium">Relationship types</div>
+      <p className="mb-3 text-sm text-muted-foreground">
+        The kinds offered when linking contacts. The male/female versions are shown automatically
+        based on the related contact’s gender (e.g. a “Parent” who is female reads “Mother”).
+      </p>
+      <div className="space-y-3">
+        {(types ?? []).map((t) => (
+          <RelTypeRow key={t.id} t={t} onPatch={patch} onRemove={remove} />
+        ))}
+      </div>
+      <form onSubmit={add} className="mt-3 flex flex-wrap gap-2">
+        <Input className="max-w-[12rem]" placeholder="Name (e.g. Mentor)" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input className="max-w-[12rem]" placeholder="Reverse (e.g. Mentee)" value={reverse} onChange={(e) => setReverse(e.target.value)} />
+        <Button type="submit" variant="secondary">
+          Add
+        </Button>
+      </form>
+    </Card>
+  );
+}
+
+function RelTypeRow({
+  t,
+  onPatch,
+  onRemove,
+}: {
+  t: RelationshipType;
+  onPatch: (id: number, field: RelField, value: string) => void;
+  onRemove: (id: number) => void;
+}) {
+  const field = (f: RelField, placeholder: string, className: string) => (
+    <Input
+      className={className}
+      placeholder={placeholder}
+      defaultValue={(t[f] as string | null) ?? ""}
+      onBlur={(e) => {
+        const v = e.target.value;
+        if (f === "name" && !v.trim()) return; // name is required
+        if (v !== ((t[f] as string | null) ?? "")) onPatch(t.id, f, v);
+      }}
+    />
+  );
+  const m = <span className="text-xs text-muted-foreground">♂</span>;
+  const f = <span className="text-xs text-muted-foreground">♀</span>;
+  return (
+    <div className="rounded-md border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {field("name", "Name", "w-36")}
+        {m}
+        {field("name_male", "male", "w-28")}
+        {f}
+        {field("name_female", "female", "w-28")}
+        <button
+          onClick={() => void onRemove(t.id)}
+          title="Delete"
+          className="ml-auto rounded-md p-1.5 text-muted-foreground transition hover:text-destructive"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="w-4 text-center text-muted-foreground">↔</span>
+        {field("reverse_name", "Reverse (optional)", "w-36")}
+        {m}
+        {field("reverse_name_male", "male", "w-28")}
+        {f}
+        {field("reverse_name_female", "female", "w-28")}
+      </div>
     </div>
   );
 }

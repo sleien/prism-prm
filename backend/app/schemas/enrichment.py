@@ -11,6 +11,19 @@ from pydantic import BaseModel, ConfigDict, Field
 class RelationshipTypeIn(BaseModel):
     name: str = Field(max_length=80)
     reverse_name: str | None = Field(default=None, max_length=80)
+    name_male: str | None = Field(default=None, max_length=80)
+    name_female: str | None = Field(default=None, max_length=80)
+    reverse_name_male: str | None = Field(default=None, max_length=80)
+    reverse_name_female: str | None = Field(default=None, max_length=80)
+
+
+class RelationshipTypeUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=80)
+    reverse_name: str | None = Field(default=None, max_length=80)
+    name_male: str | None = Field(default=None, max_length=80)
+    name_female: str | None = Field(default=None, max_length=80)
+    reverse_name_male: str | None = Field(default=None, max_length=80)
+    reverse_name_female: str | None = Field(default=None, max_length=80)
 
 
 class RelationshipTypeOut(RelationshipTypeIn):

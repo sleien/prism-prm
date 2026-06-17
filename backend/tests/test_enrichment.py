@@ -72,6 +72,34 @@ async def test_relationship_labels_are_gendered_by_related_contact(client):
 
 
 @pytest.mark.asyncio
+async def test_relationship_type_male_female_editable(client):
+    await _register(client, "a@example.com", "A")
+    types = (await client.get("/api/relationship-types")).json()
+    parent = next(t for t in types if t["name"] == "Parent")
+    # Seeded gendered defaults are exposed.
+    assert parent["name_male"] == "Father" and parent["name_female"] == "Mother"
+    assert parent["reverse_name_female"] == "Daughter"
+
+    # Editing the female label is reflected immediately on existing relationships.
+    upd = await client.patch(
+        f"/api/relationship-types/{parent['id']}", json={"name_female": "Mama"}
+    )
+    assert upd.status_code == 200
+    assert upd.json()["name_female"] == "Mama"
+
+    kid = (await client.post("/api/contacts", json={"display_name": "Kid"})).json()["id"]
+    mom = (
+        await client.post("/api/contacts", json={"display_name": "Mom", "gender": "female"})
+    ).json()["id"]
+    await client.post(
+        "/api/relationships",
+        json={"from_contact_id": kid, "to_contact_id": mom, "type_id": parent["id"]},
+    )
+    label = (await client.get(f"/api/contacts/{kid}/relationships")).json()[0]["label"]
+    assert label == "Mama"
+
+
+@pytest.mark.asyncio
 async def test_relationship_to_self_rejected(client):
     await _register(client, "a@example.com", "A")
     types = (await client.get("/api/relationship-types")).json()
