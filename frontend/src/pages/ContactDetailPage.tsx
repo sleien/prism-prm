@@ -541,14 +541,11 @@ function RelationshipsSection({ contactId }: { contactId: number }) {
               {r.contact_name}
               {r.contact_id === selfId ? " (you)" : ""}
             </Link>
-            {r.derived ? (
-              <span className="text-xs text-muted-foreground" title="Inferred from parent links">
-                auto
-              </span>
-            ) : (
+            {!r.derived && (
               <button
                 onClick={() => void remove(r.relationship_id)}
                 className="text-muted-foreground hover:text-destructive"
+                title="Remove"
               >
                 <Trash2 size={13} />
               </button>
