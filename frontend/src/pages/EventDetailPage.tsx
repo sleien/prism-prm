@@ -4,8 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Coins, MapPin, Trash2, UserPlus } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { AttendeeDetail, CalEvent, Contact, EventType, Visibility } from "@/lib/types";
-import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
-import { visibilityStyles } from "@/lib/contacts";
+import { Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { useDateFormat } from "@/lib/dates";
 import { useAuth } from "@/auth/AuthContext";
 
@@ -159,7 +158,6 @@ export function EventDetailPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <BackLink />
-        <Badge className={visibilityStyles[event.visibility]}>{event.visibility}</Badge>
         {event.last_synced_at && (
           <span className="text-xs text-muted-foreground">✓ in Nextcloud calendar</span>
         )}
@@ -237,8 +235,8 @@ export function EventDetailPage() {
             <div>
               <Label htmlFor="ev-vis">Visibility</Label>
               <Select id="ev-vis" value={visibility} onChange={(e) => setVisibility(e.target.value as Visibility)}>
-                <option value="private">Private — you + partners</option>
-                <option value="public">Public — all users</option>
+                <option value="private">Private</option>
+                <option value="public">Public</option>
               </Select>
             </div>
             <div>

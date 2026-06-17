@@ -15,8 +15,7 @@ import type {
   UserOut,
   Visibility,
 } from "@/lib/types";
-import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
-import { visibilityStyles } from "@/lib/contacts";
+import { Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { useDateFormat } from "@/lib/dates";
 import { useAuth } from "@/auth/AuthContext";
 
@@ -151,7 +150,6 @@ export function ContactDetailPage() {
           <span className="font-medium">New contact</span>
         ) : data ? (
           <>
-            <Badge className={visibilityStyles[data.visibility]}>{data.visibility}</Badge>
             {data.dirty ? (
               <span className="text-xs text-amber-500">• pending sync</span>
             ) : data.last_synced_at ? (
@@ -237,8 +235,8 @@ export function ContactDetailPage() {
               value={form.visibility ?? "public"}
               onChange={(e) => set("visibility", e.target.value as Visibility)}
             >
-              <option value="private">Private — you + partners</option>
-              <option value="public">Public — all users</option>
+              <option value="private">Private</option>
+              <option value="public">Public</option>
             </Select>
           </div>
           <div>

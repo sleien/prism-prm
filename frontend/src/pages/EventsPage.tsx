@@ -1,11 +1,10 @@
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Coins, MapPin, Plus, Trash2, Users } from "lucide-react";
+import { Bell, Coins, MapPin, Plus, Search, Trash2, Users } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { CalEvent, Contact, EventType, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
-import { visibilityStyles } from "@/lib/contacts";
 import { formatDate, formatDateTime, type DateFormat } from "@/lib/dates";
 import { useAuth } from "@/auth/AuthContext";
 
@@ -65,6 +64,7 @@ export function EventsPage() {
   const [reminder, setReminder] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   function toggleAttendee(id: number) {
     setAttendees((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
@@ -127,11 +127,27 @@ export function EventsPage() {
     }
   }
 
+  const eq = search.trim().toLowerCase();
+  const filteredEvents = (events ?? []).filter((ev) => {
+    if (!eq) return true;
+    const hay = [
+      ev.title,
+      ev.description,
+      ev.location,
+      ev.event_type,
+      ...ev.attendees.map((a) => contactName(a.contact_id)),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(eq);
+  });
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Events</h1>
-        <span className="text-sm text-muted-foreground">{events?.length ?? 0} events</span>
+        <span className="text-sm text-muted-foreground">{filteredEvents.length} events</span>
         <Button className="ml-auto" onClick={() => setShowForm((v) => !v)}>
           <Plus size={16} /> New event
         </Button>
@@ -226,8 +242,8 @@ export function EventsPage() {
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value as Visibility)}
               >
-                <option value="private">Private — you + partners</option>
-                <option value="public">Public — all users</option>
+                <option value="private">Private</option>
+                <option value="public">Public</option>
               </Select>
             </div>
             <div>
@@ -308,8 +324,26 @@ export function EventsPage() {
         </Card>
       )}
 
+      {events && events.length > 0 && (
+        <div className="relative">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            className="pl-9"
+            placeholder="Search events by title, description, location, attendee…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+      {events && events.length > 0 && filteredEvents.length === 0 && (
+        <Card className="p-8 text-center text-muted-foreground">No events match your search.</Card>
+      )}
+
       <div className="space-y-3">
-        {events?.map((ev) => (
+        {filteredEvents.map((ev) => (
           <Card key={ev.id} className="p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -317,7 +351,6 @@ export function EventsPage() {
                   <Link to={`/events/${ev.id}`} className="font-medium hover:underline">
                     {ev.title}
                   </Link>
-                  <Badge className={visibilityStyles[ev.visibility]}>{ev.visibility}</Badge>
                   {ev.event_type && (
                     <Badge className="border-border text-muted-foreground">
                       {typeEmoji(ev.event_type)} {ev.event_type}

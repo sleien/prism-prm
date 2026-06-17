@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mail, Plus, RefreshCw } from "lucide-react";
+import { Mail, Plus, RefreshCw, Search } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Contact, SyncResult, Tag } from "@/lib/types";
-import { Badge, Button, Card } from "@/components/ui";
-import { visibilityStyles } from "@/lib/contacts";
+import { Button, Card, Input } from "@/components/ui";
 
 export function ContactsPage() {
   const qc = useQueryClient();
@@ -19,6 +18,7 @@ export function ContactsPage() {
   const [busy, setBusy] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   async function syncNow() {
     setSyncMsg(null);
@@ -42,15 +42,29 @@ export function ContactsPage() {
   const tagMap = new Map<string, Tag>();
   for (const c of contacts ?? []) for (const t of c.tags ?? []) tagMap.set(t.name, t);
   const allTags = [...tagMap.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const filtered = activeTag
-    ? (contacts ?? []).filter((c) => c.tags?.some((t) => t.name === activeTag))
-    : contacts;
+
+  const q = search.trim().toLowerCase();
+  const matches = (c: Contact) =>
+    !q ||
+    [
+      c.display_name,
+      c.first_name,
+      c.last_name,
+      c.organization,
+      c.telegram,
+      ...c.emails.map((e) => e.value),
+      ...c.phones.map((p) => p.value),
+      ...(c.tags ?? []).map((t) => t.name),
+    ].some((v) => v?.toLowerCase().includes(q));
+  const filtered = (contacts ?? []).filter(
+    (c) => matches(c) && (!activeTag || c.tags?.some((t) => t.name === activeTag)),
+  );
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Contacts</h1>
-        <span className="text-sm text-muted-foreground">{contacts?.length ?? 0} people</span>
+        <span className="text-sm text-muted-foreground">{filtered.length} people</span>
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" onClick={() => void syncNow()} disabled={busy}>
             <RefreshCw size={16} className={busy ? "animate-spin" : ""} /> Sync now
@@ -59,6 +73,19 @@ export function ContactsPage() {
             <Plus size={16} /> New contact
           </Button>
         </div>
+      </div>
+
+      <div className="relative">
+        <Search
+          size={16}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          className="pl-9"
+          placeholder="Search contacts by name, organization, email, phone, tag…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
       {syncMsg && (
@@ -76,6 +103,9 @@ export function ContactsPage() {
         <Card className="p-8 text-center text-muted-foreground">
           No contacts yet. Add one, or hit <strong>Sync now</strong> to pull them from Nextcloud.
         </Card>
+      )}
+      {contacts && contacts.length > 0 && filtered.length === 0 && (
+        <Card className="p-8 text-center text-muted-foreground">No contacts match your search.</Card>
       )}
 
       {allTags.length > 0 && (
@@ -110,10 +140,7 @@ export function ContactsPage() {
         {filtered?.map((c) => (
           <Link key={c.id} to={`/contacts/${c.id}`}>
             <Card className="h-full p-4 transition hover:border-primary/60">
-              <div className="flex items-start justify-between gap-2">
-                <div className="font-medium">{c.display_name || "Unnamed"}</div>
-                <Badge className={visibilityStyles[c.visibility]}>{c.visibility}</Badge>
-              </div>
+              <div className="font-medium">{c.display_name || "Unnamed"}</div>
               {c.organization && (
                 <div className="mt-0.5 text-sm text-muted-foreground">{c.organization}</div>
               )}
