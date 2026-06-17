@@ -13,6 +13,7 @@ export interface Me {
   phone_country_code: string;
   phone_number_format: string;
   phone_include_country_code: boolean;
+  date_format: string;
   nextcloud_configured: boolean;
   nextcloud_url?: string | null;
   nextcloud_username?: string | null;

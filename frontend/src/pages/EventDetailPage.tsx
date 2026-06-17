@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import type { AttendeeDetail, CalEvent, Contact, EventType, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
+import { useDateFormat } from "@/lib/dates";
 import { useAuth } from "@/auth/AuthContext";
 
 const reminderOptions = [
@@ -36,6 +37,7 @@ export function EventDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { me } = useAuth();
+  const { formatDateTime } = useDateFormat();
 
   const { data: event, isLoading, error } = useQuery({
     queryKey: ["event", id],
@@ -306,7 +308,7 @@ export function EventDetailPage() {
           <div className="space-y-2">
             <div className="text-lg font-medium">{event.title}</div>
             <div className="text-sm text-muted-foreground">
-              {new Date(event.starts_at).toLocaleString()}
+              {formatDateTime(event.starts_at, !event.all_day)}
             </div>
             {event.location && (
               <div className="flex items-center gap-1.5 text-sm text-muted-foreground">

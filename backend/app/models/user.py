@@ -47,6 +47,10 @@ class User(Base, TimestampMixin):
     phone_include_country_code: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
+    # How dates are displayed, e.g. "dd.mm.yyyy" | "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd".
+    date_format: Mapped[str] = mapped_column(
+        String(12), default="dd.mm.yyyy", server_default="dd.mm.yyyy", nullable=False
+    )
 
     # Per-user Nextcloud account. The app password is stored encrypted. When
     # unset, the instance-level NEXTCLOUD_* env settings act as a fallback.

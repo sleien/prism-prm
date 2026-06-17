@@ -4,6 +4,7 @@ import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Contact, JournalTemplate, RelationshipType, Tag, UserOut } from "@/lib/types";
 import { useAuth } from "@/auth/AuthContext";
+import { DATE_FORMATS } from "@/lib/dates";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 
 export function SettingsPage() {
@@ -28,6 +29,7 @@ export function SettingsPage() {
   const [phoneCC, setPhoneCC] = useState("+41");
   const [phoneFmt, setPhoneFmt] = useState("xxx xxx xx xx");
   const [phoneIncCC, setPhoneIncCC] = useState(false);
+  const [dateFmt, setDateFmt] = useState("dd.mm.yyyy");
   const [ncUrl, setNcUrl] = useState("");
   const [ncUser, setNcUser] = useState("");
   const [ncPass, setNcPass] = useState("");
@@ -41,6 +43,7 @@ export function SettingsPage() {
     setPhoneCC(me.phone_country_code);
     setPhoneFmt(me.phone_number_format);
     setPhoneIncCC(me.phone_include_country_code);
+    setDateFmt(me.date_format);
     setNcUrl(me.nextcloud_url ?? "");
     setNcUser(me.nextcloud_username ?? "");
     setNcBook(me.nextcloud_addressbook ?? "");
@@ -71,6 +74,7 @@ export function SettingsPage() {
       phone_country_code: phoneCC,
       phone_number_format: phoneFmt,
       phone_include_country_code: phoneIncCC,
+      date_format: dateFmt,
     });
     await refresh();
     setFlash("Preferences saved");
@@ -114,6 +118,16 @@ export function SettingsPage() {
           <div>
             <Label htmlFor="p-fmt">Phone number format</Label>
             <Input id="p-fmt" value={phoneFmt} onChange={(e) => setPhoneFmt(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="p-date">Date format</Label>
+            <Select id="p-date" value={dateFmt} onChange={(e) => setDateFmt(e.target.value)}>
+              {DATE_FORMATS.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </Select>
           </div>
         </div>
         <label className="mt-3 flex items-center gap-2 text-sm">

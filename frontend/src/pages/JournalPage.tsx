@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { JournalEntry, JournalTemplate, Prompt } from "@/lib/types";
+import { useDateFormat } from "@/lib/dates";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 
 type Answer = string | number | boolean;
@@ -233,6 +234,7 @@ function JournalEntryEditor({ template }: { template: JournalTemplate }) {
     queryFn: () => api.get<JournalEntry[]>(`/api/journal/templates/${template.id}/entries`),
   });
 
+  const { formatDate } = useDateFormat();
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -331,7 +333,7 @@ function JournalEntryEditor({ template }: { template: JournalTemplate }) {
           <ul className="space-y-1 text-sm">
             {entries.map((en) => (
               <li key={en.id} className="flex items-center justify-between gap-2 border-b border-border/50 py-1">
-                <span>{en.entry_date}</span>
+                <span>{formatDate(en.entry_date)}</span>
                 {en.mood != null && <span className="text-muted-foreground">mood {en.mood}</span>}
               </li>
             ))}

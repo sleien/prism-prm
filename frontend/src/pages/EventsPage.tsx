@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import type { CalEvent, Contact, EventType, Visibility } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
+import { formatDate, formatDateTime, type DateFormat } from "@/lib/dates";
 import { useAuth } from "@/auth/AuthContext";
 
 const reminderOptions = [
@@ -15,11 +16,8 @@ const reminderOptions = [
   { label: "1 day before", value: 1440 },
 ];
 
-function fmt(iso: string, allDay: boolean): string {
-  const d = new Date(iso);
-  return allDay
-    ? d.toLocaleDateString()
-    : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+function fmt(iso: string, allDay: boolean, df: DateFormat): string {
+  return allDay ? formatDate(iso, df) : formatDateTime(iso, df);
 }
 
 // A local-time value for a date or datetime-local input set to "now".
@@ -33,6 +31,7 @@ function nowValue(allDay: boolean): string {
 export function EventsPage() {
   const qc = useQueryClient();
   const { me } = useAuth();
+  const df = (me?.date_format ?? "dd.mm.yyyy") as DateFormat;
   const { data: events, isLoading, error } = useQuery({
     queryKey: ["events"],
     queryFn: () => api.get<CalEvent[]>("/api/events"),
@@ -326,8 +325,8 @@ export function EventsPage() {
                   )}
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  {fmt(ev.starts_at, ev.all_day)}
-                  {ev.ends_at && ` — ${fmt(ev.ends_at, ev.all_day)}`}
+                  {fmt(ev.starts_at, ev.all_day, df)}
+                  {ev.ends_at && ` — ${fmt(ev.ends_at, ev.all_day, df)}`}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   {ev.location && (

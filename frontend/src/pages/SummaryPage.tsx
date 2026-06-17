@@ -4,6 +4,7 @@ import { CalendarDays, NotebookPen, Smile, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Summary } from "@/lib/types";
 import { useAuth } from "@/auth/AuthContext";
+import { useDateFormat } from "@/lib/dates";
 import { Card } from "@/components/ui";
 
 function Sparkline({ points }: { points: number[] }) {
@@ -40,6 +41,7 @@ function Stat({ to, icon, value, label }: { to: string; icon: React.ReactNode; v
 
 export function SummaryPage() {
   const { me } = useAuth();
+  const { formatDateTime } = useDateFormat();
   const { data, isLoading } = useQuery({ queryKey: ["summary"], queryFn: () => api.get<Summary>("/api/summary") });
 
   return (
@@ -79,7 +81,7 @@ export function SummaryPage() {
                     <li key={ev.id} className="flex items-center justify-between gap-2">
                       <span>{ev.title}</span>
                       <span className="text-muted-foreground">
-                        {new Date(ev.starts_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                        {formatDateTime(ev.starts_at, !ev.all_day)}
                       </span>
                     </li>
                   ))}

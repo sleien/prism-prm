@@ -17,6 +17,7 @@ import type {
 } from "@/lib/types";
 import { Badge, Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
+import { useDateFormat } from "@/lib/dates";
 import { useAuth } from "@/auth/AuthContext";
 
 function ageFrom(bday?: string | null): number | null {
@@ -643,6 +644,7 @@ function LifeEventsSection({ contactId }: { contactId: number }) {
     queryFn: () => api.get<LifeEventType[]>("/api/life-event-types"),
   });
 
+  const { formatDate } = useDateFormat();
   const [title, setTitle] = useState("");
   const [emoji, setEmoji] = useState("");
   const [date, setDate] = useState("");
@@ -680,7 +682,7 @@ function LifeEventsSection({ contactId }: { contactId: number }) {
           <li key={ev.id} className="flex items-center gap-2 text-sm">
             <span className="text-lg">{ev.emoji || "•"}</span>
             <span className="font-medium">{ev.title}</span>
-            {ev.happened_on && <span className="text-muted-foreground">{ev.happened_on}</span>}
+            {ev.happened_on && <span className="text-muted-foreground">{formatDate(ev.happened_on)}</span>}
             {ev.note && <span className="text-muted-foreground">— {ev.note}</span>}
             <button onClick={() => void remove(ev.id)} className="ml-auto text-muted-foreground hover:text-destructive">
               <Trash2 size={14} />
