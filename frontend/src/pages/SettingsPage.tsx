@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { Contact, JournalTemplate, UserOut } from "@/lib/types";
+import type { Contact, JournalTemplate, Tag, UserOut } from "@/lib/types";
 import { useAuth } from "@/auth/AuthContext";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 
@@ -271,7 +271,90 @@ export function SettingsPage() {
         queryKey="event-types"
         kind="emoji"
       />
+      <TagManager />
     </div>
+  );
+}
+
+function TagManager() {
+  const qc = useQueryClient();
+  const { data: tags } = useQuery({ queryKey: ["tags"], queryFn: () => api.get<Tag[]>("/api/tags") });
+  const [name, setName] = useState("");
+
+  async function refresh() {
+    await qc.invalidateQueries({ queryKey: ["tags"] });
+    await qc.invalidateQueries({ queryKey: ["contacts"] });
+  }
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    await api.post("/api/tags", { name: name.trim() });
+    setName("");
+    await refresh();
+  }
+  async function rename(t: Tag, value: string) {
+    if (value.trim() && value !== t.name) {
+      await api.patch(`/api/tags/${t.id}`, { name: value.trim() });
+      await refresh();
+    }
+  }
+  async function recolor(t: Tag, color: string) {
+    await api.patch(`/api/tags/${t.id}`, { color });
+    await refresh();
+  }
+  async function remove(t: Tag) {
+    if (!confirm(`Delete the tag "${t.name}"? It will be removed from all contacts.`)) return;
+    await api.del(`/api/tags/${t.id}`);
+    await refresh();
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-1 font-medium">Tags</div>
+      <p className="mb-3 text-sm text-muted-foreground">
+        Organize contacts with tags. Recolor, rename, or delete them here.
+      </p>
+      <ul className="mb-3 divide-y divide-border/50">
+        {(tags ?? []).map((t) => (
+          <li key={t.id} className="flex items-center gap-3 py-2">
+            <input
+              type="color"
+              value={t.color ?? "#94a3b8"}
+              onChange={(e) => void recolor(t, e.target.value)}
+              className="h-6 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+              title="Tag color"
+            />
+            <Input
+              defaultValue={t.name}
+              onBlur={(e) => void rename(t, e.target.value)}
+              className="max-w-xs"
+            />
+            <span className="text-xs text-muted-foreground">
+              {t.count ?? 0} contact{(t.count ?? 0) === 1 ? "" : "s"}
+            </span>
+            <button
+              onClick={() => void remove(t)}
+              title="Delete"
+              className="ml-auto rounded-md p-1.5 text-muted-foreground transition hover:text-destructive"
+            >
+              <Trash2 size={16} />
+            </button>
+          </li>
+        ))}
+        {tags && tags.length === 0 && <li className="py-2 text-sm text-muted-foreground">No tags yet.</li>}
+      </ul>
+      <form onSubmit={add} className="flex flex-wrap gap-2">
+        <Input
+          className="max-w-xs"
+          placeholder="New tag"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <Button type="submit" variant="secondary">
+          Add
+        </Button>
+      </form>
+    </Card>
   );
 }
 

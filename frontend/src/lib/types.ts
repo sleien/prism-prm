@@ -34,6 +34,13 @@ export interface Group {
 
 export type Visibility = "public" | "group" | "private";
 
+export interface Tag {
+  id: number;
+  name: string;
+  color?: string | null;
+  count?: number;
+}
+
 export interface TypedValue {
   type: string;
   value: string;
@@ -66,6 +73,7 @@ export interface Contact {
   visibility: Visibility;
   group_id?: number | null;
   linked_user_id?: number | null;
+  tags?: Tag[];
   latitude?: number | null;
   longitude?: number | null;
   nextcloud_uid?: string | null;

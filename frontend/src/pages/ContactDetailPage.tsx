@@ -10,6 +10,7 @@ import type {
   LifeEventType,
   RelatedContact,
   RelationshipType,
+  Tag,
   TypedValue,
   UserOut,
   Visibility,
@@ -50,6 +51,7 @@ export function ContactDetailPage() {
   const [emails, setEmails] = useState<TypedValue[]>([]);
   const [phones, setPhones] = useState<TypedValue[]>([]);
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -60,8 +62,9 @@ export function ContactDetailPage() {
       setEmails(data.emails ?? []);
       setPhones(data.phones ?? []);
       setAddresses(data.addresses ?? []);
+      setTags((data.tags ?? []).map((t) => t.name));
     } else if (isNew) {
-      setForm({ visibility: "private" });
+      setForm({ visibility: "public" });
     }
   }, [data, isNew]);
 
@@ -89,17 +92,20 @@ export function ContactDetailPage() {
       emails: emails.filter((x) => x.value),
       phones: phones.filter((x) => x.value),
       addresses: addresses.filter((a) => a.street || a.city || a.country),
+      tags,
     };
     try {
       if (isNew) {
         const created = await api.post<Contact>("/api/contacts", payload);
         await qc.invalidateQueries({ queryKey: ["contacts"] });
+        await qc.invalidateQueries({ queryKey: ["tags"] });
         navigate(`/contacts/${created.id}`, { replace: true });
         return;
       }
       await api.patch<Contact>(`/api/contacts/${id}`, payload);
       await qc.invalidateQueries({ queryKey: ["contact", id] });
       await qc.invalidateQueries({ queryKey: ["contacts"] });
+      await qc.invalidateQueries({ queryKey: ["tags"] });
       setMsg("Saved — syncing to Nextcloud.");
     } catch (e2) {
       setErr(e2 instanceof ApiError ? e2.message : "Could not save");
@@ -247,6 +253,9 @@ export function ContactDetailPage() {
           </div>
           <div className="sm:col-span-2">
             <AddressListEditor items={addresses} onChange={setAddresses} />
+          </div>
+          <div className="sm:col-span-2">
+            <TagEditor tags={tags} onChange={setTags} />
           </div>
 
           <div className="sm:col-span-2">
@@ -418,6 +427,65 @@ function AddressListEditor({
       >
         <Plus size={14} /> Add address (geocoded to a map)
       </Button>
+    </div>
+  );
+}
+
+function TagEditor({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
+  const { data: catalog } = useQuery({ queryKey: ["tags"], queryFn: () => api.get<Tag[]>("/api/tags") });
+  const [input, setInput] = useState("");
+
+  const colorOf = (name: string) =>
+    catalog?.find((c) => c.name.toLowerCase() === name.toLowerCase())?.color ?? undefined;
+
+  function add(name: string) {
+    const n = name.trim();
+    if (n && !tags.some((t) => t.toLowerCase() === n.toLowerCase())) onChange([...tags, n]);
+    setInput("");
+  }
+
+  return (
+    <div>
+      <Label>Tags</Label>
+      <div className="mb-2 flex flex-wrap gap-2">
+        {tags.map((t) => (
+          <span key={t} className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm">
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ background: colorOf(t) ?? "hsl(var(--muted-foreground))" }}
+            />
+            {t}
+            <button
+              type="button"
+              onClick={() => onChange(tags.filter((x) => x !== t))}
+              className="text-muted-foreground hover:text-destructive"
+              aria-label={`Remove ${t}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {tags.length === 0 && <span className="text-sm text-muted-foreground">No tags.</span>}
+      </div>
+      <Input
+        className="max-w-xs"
+        list="tag-suggestions"
+        placeholder="Add tag…"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            add(input);
+          }
+        }}
+        onBlur={() => add(input)}
+      />
+      <datalist id="tag-suggestions">
+        {(catalog ?? []).map((c) => (
+          <option key={c.id} value={c.name} />
+        ))}
+      </datalist>
     </div>
   );
 }

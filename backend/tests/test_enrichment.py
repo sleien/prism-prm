@@ -96,6 +96,32 @@ async def test_custom_relationship_type(client):
 
 
 @pytest.mark.asyncio
+async def test_tag_catalog_rename_recolor_delete(client):
+    await _register(client, "a@example.com", "A")
+    cid = (
+        await client.post("/api/contacts", json={"display_name": "Ada", "tags": ["Friends"]})
+    ).json()["id"]
+    tag = (await client.get("/api/tags")).json()[0]
+    assert tag["name"] == "Friends" and tag["count"] == 1
+
+    # Rename + recolor.
+    upd = await client.patch(f"/api/tags/{tag['id']}", json={"name": "Pals", "color": "#123456"})
+    assert upd.json()["name"] == "Pals"
+    assert upd.json()["color"] == "#123456"
+    # The contact reflects the rename.
+    c = (await client.get(f"/api/contacts/{cid}")).json()
+    assert [t["name"] for t in c["tags"]] == ["Pals"]
+
+    # Duplicate names are rejected.
+    assert (await client.post("/api/tags", json={"name": "Pals"})).status_code == 409
+
+    # Deleting the tag removes it from the contact.
+    assert (await client.delete(f"/api/tags/{tag['id']}")).status_code == 204
+    assert (await client.get(f"/api/contacts/{cid}")).json()["tags"] == []
+    assert (await client.get("/api/tags")).json() == []
+
+
+@pytest.mark.asyncio
 async def test_life_events(client):
     await _register(client, "a@example.com", "A")
     types = (await client.get("/api/life-event-types")).json()

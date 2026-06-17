@@ -23,6 +23,14 @@ class AddressItem(BaseModel):
     country: str = ""
 
 
+class TagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    color: str | None = None
+
+
 class ContactBase(BaseModel):
     display_name: str = Field(default="", max_length=300)
     first_name: str | None = Field(default=None, max_length=200)
@@ -42,7 +50,8 @@ class ContactBase(BaseModel):
 
 
 class ContactCreate(ContactBase):
-    pass
+    # Tag names; unknown ones are created for the owner on save.
+    tags: list[str] = Field(default_factory=list)
 
 
 class ContactUpdate(BaseModel):
@@ -61,6 +70,7 @@ class ContactUpdate(BaseModel):
     visibility: Visibility | None = None
     group_id: int | None = None
     linked_user_id: int | None = None
+    tags: list[str] | None = None
 
 
 class ContactOut(ContactBase):
@@ -73,3 +83,4 @@ class ContactOut(ContactBase):
     nextcloud_uid: str | None = None
     last_synced_at: datetime | None = None
     dirty: bool = False
+    tags: list[TagOut] = Field(default_factory=list)

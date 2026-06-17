@@ -10,6 +10,7 @@ from app.models.enrichment import (
 )
 from app.models.event import Event, EventAttendee, EventNote, Reminder
 from app.models.journal import JournalEntry, JournalTemplate
+from app.models.tag import ContactTag, Tag
 from app.models.user import ApiToken, Group, GroupMembership, Partnership, User
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "Contact",
     "ContactLifeEvent",
     "ContactRelationship",
+    "ContactTag",
     "Event",
     "EventAttendee",
     "EventNote",
@@ -29,5 +31,6 @@ __all__ = [
     "Partnership",
     "RelationshipType",
     "Reminder",
+    "Tag",
     "User",
 ]

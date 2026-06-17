@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, Plus, RefreshCw } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { Contact, SyncResult } from "@/lib/types";
+import type { Contact, SyncResult, Tag } from "@/lib/types";
 import { Badge, Button, Card } from "@/components/ui";
 import { visibilityStyles } from "@/lib/contacts";
 
@@ -18,6 +18,7 @@ export function ContactsPage() {
 
   const [busy, setBusy] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
 
   async function syncNow() {
     setSyncMsg(null);
@@ -37,6 +38,13 @@ export function ContactsPage() {
       setBusy(false);
     }
   }
+
+  const tagMap = new Map<string, Tag>();
+  for (const c of contacts ?? []) for (const t of c.tags ?? []) tagMap.set(t.name, t);
+  const allTags = [...tagMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = activeTag
+    ? (contacts ?? []).filter((c) => c.tags?.some((t) => t.name === activeTag))
+    : contacts;
 
   return (
     <div className="space-y-5">
@@ -70,8 +78,36 @@ export function ContactsPage() {
         </Card>
       )}
 
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {allTags.map((t) => (
+            <button
+              key={t.name}
+              onClick={() => setActiveTag(activeTag === t.name ? null : t.name)}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition ${
+                activeTag === t.name ? "border-primary bg-accent" : "hover:bg-accent"
+              }`}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: t.color ?? "hsl(var(--muted-foreground))" }}
+              />
+              {t.name}
+            </button>
+          ))}
+          {activeTag && (
+            <button
+              onClick={() => setActiveTag(null)}
+              className="rounded-full px-3 py-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              Clear ×
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {contacts?.map((c) => (
+        {filtered?.map((c) => (
           <Link key={c.id} to={`/contacts/${c.id}`}>
             <Card className="h-full p-4 transition hover:border-primary/60">
               <div className="flex items-start justify-between gap-2">
@@ -84,6 +120,22 @@ export function ContactsPage() {
               {c.emails[0] && (
                 <div className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
                   <Mail size={14} /> {c.emails[0].value}
+                </div>
+              )}
+              {c.tags && c.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {c.tags.map((t) => (
+                    <span
+                      key={t.id}
+                      className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+                    >
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ background: t.color ?? "hsl(var(--muted-foreground))" }}
+                      />
+                      {t.name}
+                    </span>
+                  ))}
                 </div>
               )}
               {c.dirty && (

@@ -91,6 +91,55 @@ async def test_gender_round_trips_and_validates(client):
 
 
 @pytest.mark.asyncio
+async def test_new_contact_is_public_by_default(client):
+    await _register(client, "a@example.com", "A")
+    body = (await client.post("/api/contacts", json={"display_name": "Pat"})).json()
+    assert body["visibility"] == "public"
+
+
+@pytest.mark.asyncio
+async def test_phone_formatted_to_settings_pattern_on_save(client):
+    await _register(client, "a@example.com", "A")  # defaults: +41 / xxx xxx xx xx
+    created = await client.post(
+        "/api/contacts",
+        json={
+            "display_name": "Grace",
+            "phones": [
+                {"type": "cell", "value": "0793360802"},
+                {"type": "home", "value": "+41 44 558 68 08"},
+                {"type": "work", "value": "+39 339 416 0855"},  # foreign, untouched
+            ],
+        },
+    )
+    phones = {p["type"]: p["value"] for p in created.json()["phones"]}
+    assert phones["cell"] == "079 336 08 02"
+    assert phones["home"] == "044 558 68 08"
+    assert phones["work"] == "+39 339 416 0855"
+
+
+@pytest.mark.asyncio
+async def test_tags_create_and_update(client):
+    await _register(client, "a@example.com", "A")
+    created = await client.post(
+        "/api/contacts", json={"display_name": "Ada", "tags": ["Family", "Work"]}
+    )
+    assert created.status_code == 201, created.text
+    cid = created.json()["id"]
+    names = sorted(t["name"] for t in created.json()["tags"])
+    assert names == ["Family", "Work"]
+    assert all(t["color"] for t in created.json()["tags"])  # auto-colored
+
+    # Catalog reflects the auto-created tags with counts.
+    cat = {t["name"]: t["count"] for t in (await client.get("/api/tags")).json()}
+    assert cat["Family"] == 1 and cat["Work"] == 1
+
+    # Replacing the tag set drops Work and keeps Family.
+    upd = await client.patch(f"/api/contacts/{cid}", json={"tags": ["Family"]})
+    assert [t["name"] for t in upd.json()["tags"]] == ["Family"]
+    assert {t["name"]: t["count"] for t in (await client.get("/api/tags")).json()}["Work"] == 0
+
+
+@pytest.mark.asyncio
 async def test_sync_without_nextcloud_is_skipped(client):
     await _register(client, "a@example.com", "A")
     resp = await client.post("/api/contacts/sync")

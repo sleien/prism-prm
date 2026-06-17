@@ -59,6 +59,26 @@ class EventTypeOut(EventTypeIn):
     id: int
 
 
+# --- tags ---
+class TagIn(BaseModel):
+    name: str = Field(max_length=80)
+    color: str | None = Field(default=None, max_length=20)
+
+
+class TagUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=80)
+    color: str | None = Field(default=None, max_length=20)
+
+
+class TagCatalogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    color: str | None = None
+    count: int = 0
+
+
 # --- life events ---
 class LifeEventCreate(BaseModel):
     contact_id: int

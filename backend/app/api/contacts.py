@@ -11,17 +11,19 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
 from app.db import get_session
 from app.integrations.nextcloud import DavError
-from app.models import Contact, User
+from app.models import Contact, ContactTag, Tag, User
 from app.schemas.contact import ContactCreate, ContactOut, ContactUpdate
 from app.services.geocode import geocode_contact
 from app.services.nextcloud_accounts import client_for_user
+from app.services.phones import format_phones
 from app.services.sync import SyncResult, sync_contacts
+from app.services.tags import auto_color
 from app.visibility import validate_group_choice, visibility_filter
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
@@ -29,6 +31,39 @@ router = APIRouter(prefix="/contacts", tags=["contacts"])
 
 def _to_dicts(items) -> list[dict]:
     return [i.model_dump() if hasattr(i, "model_dump") else dict(i) for i in (items or [])]
+
+
+async def _set_contact_tags(
+    session: AsyncSession, user: User, contact: Contact, names: list[str]
+) -> None:
+    """Get-or-create the owner's tags by name and set the contact's links to them."""
+    wanted: list[int] = []
+    seen: set[str] = set()
+    for raw in names:
+        name = (raw or "").strip()
+        key = name.lower()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        tag = await session.scalar(
+            select(Tag).where(Tag.owner_id == user.id, func.lower(Tag.name) == key)
+        )
+        if tag is None:
+            tag = Tag(owner_id=user.id, name=name, color=auto_color(name))
+            session.add(tag)
+            await session.flush()
+        wanted.append(tag.id)
+
+    existing = list(
+        await session.scalars(select(ContactTag).where(ContactTag.contact_id == contact.id))
+    )
+    have = {ct.tag_id for ct in existing}
+    for ct in existing:
+        if ct.tag_id not in wanted:
+            await session.delete(ct)
+    for tid in wanted:
+        if tid not in have:
+            session.add(ContactTag(contact_id=contact.id, tag_id=tid))
 
 
 async def _owned(session: AsyncSession, user: User, contact_id: int) -> Contact:
@@ -76,8 +111,11 @@ async def create_contact(
     await validate_group_choice(session, user, payload.visibility, payload.group_id)
     await _validate_linked_user(session, payload.linked_user_id)
     data = payload.model_dump()
+    tag_names = data.pop("tags", [])
     data["emails"] = _to_dicts(payload.emails)
-    data["phones"] = _to_dicts(payload.phones)
+    data["phones"] = format_phones(
+        _to_dicts(payload.phones), user.phone_country_code, user.phone_number_format
+    )
     data["addresses"] = _to_dicts(payload.addresses)
     contact = Contact(
         owner_id=user.id,
@@ -87,8 +125,10 @@ async def create_contact(
     )
     session.add(contact)
     await geocode_contact(contact)
+    await session.flush()
+    await _set_contact_tags(session, user, contact, tag_names)
     await session.commit()
-    await session.refresh(contact)
+    await session.refresh(contact, attribute_names=["tags"])
     return contact
 
 
@@ -101,18 +141,25 @@ async def update_contact(
 ) -> Contact:
     contact = await _owned(session, user, contact_id)
     updates = payload.model_dump(exclude_unset=True)
+    tag_names = updates.pop("tags", None)
     for field in ("emails", "phones", "addresses"):
         if field in updates and updates[field] is not None:
             updates[field] = _to_dicts(getattr(payload, field))
+    if updates.get("phones") is not None:
+        updates["phones"] = format_phones(
+            updates["phones"], user.phone_country_code, user.phone_number_format
+        )
     for key, value in updates.items():
         setattr(contact, key, value)
     await validate_group_choice(session, user, contact.visibility, contact.group_id)
     await _validate_linked_user(session, contact.linked_user_id)
     if "addresses" in updates:
         await geocode_contact(contact)
+    if tag_names is not None:
+        await _set_contact_tags(session, user, contact, tag_names)
     contact.dirty = True
     await session.commit()
-    await session.refresh(contact)
+    await session.refresh(contact, attribute_names=["tags"])
     return contact
 
 

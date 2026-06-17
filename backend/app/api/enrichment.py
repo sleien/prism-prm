@@ -8,7 +8,7 @@ each user's own annotations on the contacts they can see.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
@@ -17,9 +17,11 @@ from app.models import (
     Contact,
     ContactLifeEvent,
     ContactRelationship,
+    ContactTag,
     EventType,
     LifeEventType,
     RelationshipType,
+    Tag,
     User,
 )
 from app.schemas.enrichment import (
@@ -33,7 +35,11 @@ from app.schemas.enrichment import (
     RelationshipCreate,
     RelationshipTypeIn,
     RelationshipTypeOut,
+    TagCatalogOut,
+    TagIn,
+    TagUpdate,
 )
+from app.services.tags import auto_color
 from app.visibility import visibility_filter
 
 router = APIRouter(tags=["enrichment"])
@@ -367,5 +373,92 @@ async def delete_event_type(
     et = await session.get(EventType, type_id)
     if et is not None and et.owner_id == user.id:
         await session.delete(et)
+        await session.commit()
+    return Response(status_code=204)
+
+
+# --- tags -------------------------------------------------------------------
+
+
+async def _owned_tag(session: AsyncSession, user: User, tag_id: int) -> Tag:
+    tag = await session.get(Tag, tag_id)
+    if tag is None or tag.owner_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tag not found")
+    return tag
+
+
+@router.get("/tags", response_model=list[TagCatalogOut])
+async def list_tags(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> list[TagCatalogOut]:
+    counts = dict(
+        (
+            await session.execute(
+                select(ContactTag.tag_id, func.count())
+                .join(Tag, Tag.id == ContactTag.tag_id)
+                .where(Tag.owner_id == user.id)
+                .group_by(ContactTag.tag_id)
+            )
+        ).all()
+    )
+    rows = await session.scalars(
+        select(Tag).where(Tag.owner_id == user.id).order_by(func.lower(Tag.name))
+    )
+    return [
+        TagCatalogOut(id=t.id, name=t.name, color=t.color, count=counts.get(t.id, 0))
+        for t in rows
+    ]
+
+
+@router.post("/tags", response_model=TagCatalogOut, status_code=201)
+async def create_tag(
+    payload: TagIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> TagCatalogOut:
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tag name required")
+    existing = await session.scalar(
+        select(Tag).where(Tag.owner_id == user.id, func.lower(Tag.name) == name.lower())
+    )
+    if existing is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Tag already exists")
+    tag = Tag(owner_id=user.id, name=name, color=payload.color or auto_color(name))
+    session.add(tag)
+    await session.commit()
+    await session.refresh(tag)
+    return TagCatalogOut(id=tag.id, name=tag.name, color=tag.color, count=0)
+
+
+@router.patch("/tags/{tag_id}", response_model=TagCatalogOut)
+async def update_tag(
+    tag_id: int,
+    payload: TagUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> TagCatalogOut:
+    tag = await _owned_tag(session, user, tag_id)
+    if payload.name is not None and payload.name.strip():
+        tag.name = payload.name.strip()
+    if payload.color is not None:
+        tag.color = payload.color or None
+    await session.commit()
+    await session.refresh(tag)
+    count = await session.scalar(
+        select(func.count()).select_from(ContactTag).where(ContactTag.tag_id == tag.id)
+    )
+    return TagCatalogOut(id=tag.id, name=tag.name, color=tag.color, count=count or 0)
+
+
+@router.delete("/tags/{tag_id}", status_code=204)
+async def delete_tag(
+    tag_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    tag = await session.get(Tag, tag_id)
+    if tag is not None and tag.owner_id == user.id:
+        await session.delete(tag)  # contact_tag rows cascade
         await session.commit()
     return Response(status_code=204)

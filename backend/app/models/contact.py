@@ -9,12 +9,16 @@ round-trip.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Date, DateTime, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import Visibility
 from app.db import Base, JSONType, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.tag import Tag
 
 
 class Contact(Base, TimestampMixin):
@@ -23,9 +27,9 @@ class Contact(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
 
-    # Visibility
+    # Visibility — new contacts are public by default.
     visibility: Mapped[str] = mapped_column(
-        String(20), default=Visibility.PRIVATE, nullable=False
+        String(20), default=Visibility.PUBLIC, nullable=False
     )
     # Set when visibility == GROUP.
     group_id: Mapped[int | None] = mapped_column(
@@ -71,3 +75,10 @@ class Contact(Base, TimestampMixin):
     addresses: Mapped[list] = mapped_column(JSONType, default=list, nullable=False)
     # User-defined extra fields.
     custom_fields: Mapped[dict] = mapped_column(JSONType, default=dict, nullable=False)
+
+    # Owner-defined tags, via the contact_tag association. Read-only: the API
+    # writes the association rows directly (so it never fights the unit of work),
+    # and this eager-loaded (selectin is async-safe) view is just for serializing.
+    tags: Mapped[list[Tag]] = relationship(
+        secondary="contact_tag", lazy="selectin", order_by="Tag.name", viewonly=True
+    )
