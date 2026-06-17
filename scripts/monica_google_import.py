@@ -148,6 +148,7 @@ class Person:
     notes: str | None = None
     nickname: str | None = None
     gender: str | None = None
+    tags: list[str] = field(default_factory=list)
     monica_id: int | None = None
     sources: set[str] = field(default_factory=set)
 
@@ -366,6 +367,14 @@ def parse_monica(path: Path) -> tuple[dict[int, Person], list[tuple[str, int, in
             sources={"monica"},
         )
 
+    # tags: id -> name, then attach the names to each tagged contact.
+    tag_name = {int(t["id"]): (t.get("name") or "").strip() for t in _parse_insert(text, "tags")}
+    for ct in _parse_insert(text, "contact_tag"):
+        cid = int(ct["contact_id"])
+        name = tag_name.get(int(ct["tag_id"]))
+        if name and cid in people and name not in people[cid].tags:
+            people[cid].tags.append(name)
+
     # relationship types: id -> (name, reverse)
     rtypes = {
         int(t["id"]): ((t.get("name") or "").lower(), (t.get("name_reverse_relationship") or "").lower())
@@ -452,6 +461,7 @@ def merge(google: list[Person], monica: dict[int, Person]) -> tuple[list[Person]
             tgt.notes = tgt.notes or m.notes
             tgt.nickname = tgt.nickname or m.nickname
             tgt.middle = tgt.middle or m.middle
+            tgt.tags = list(dict.fromkeys(tgt.tags + m.tags))
             _merge_typed(tgt.emails, m.emails)
             _merge_typed(tgt.phones, m.phones)
             tgt.birthday = tgt.birthday or m.birthday
@@ -539,7 +549,8 @@ def contact_payload(p: Person) -> dict:
         "emails": p.emails,
         "phones": p.phones,
         "addresses": p.addresses,
-        "visibility": "private",
+        "tags": p.tags,
+        "visibility": "public",
     }
 
 
@@ -636,6 +647,9 @@ def main() -> None:
     print(f"Merged unique:      {len(merged)}  (in both sources: {both})")
     print(f"  with gender:      {with_gender}  ({len(merged) - with_gender} unspecified)")
     print(f"Relationships:      {len(rels)} edges")
+    tagged = sum(1 for p in merged if p.tags)
+    distinct_tags = sorted({t for p in merged for t in p.tags})
+    print(f"Tags:               {tagged} contacts tagged; {len(distinct_tags)} distinct: {distinct_tags}")
     print(f"Preview written to: {args.out_dir}/merged.json , skipped.json")
     if _DETECTOR is None:
         print("NOTE: gender-guesser not installed; name inference disabled.")
