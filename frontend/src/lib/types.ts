@@ -53,6 +53,7 @@ export interface Contact {
   owner_id: number;
   display_name: string;
   first_name?: string | null;
+  middle_name?: string | null;
   last_name?: string | null;
   organization?: string | null;
   job_title?: string | null;

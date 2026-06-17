@@ -33,6 +33,7 @@ log = logging.getLogger("prism.sync")
 _PARSED_FIELDS = (
     "display_name",
     "first_name",
+    "middle_name",
     "last_name",
     "organization",
     "job_title",

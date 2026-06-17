@@ -77,6 +77,7 @@ export function ContactDetailPage() {
     const payload = {
       display_name: form.display_name,
       first_name: form.first_name,
+      middle_name: form.middle_name,
       last_name: form.last_name,
       organization: form.organization,
       job_title: form.job_title,
@@ -169,6 +170,7 @@ export function ContactDetailPage() {
             <Input id="d-name" value={form.display_name ?? ""} onChange={(e) => set("display_name", e.target.value)} />
           </div>
           <Field label="First name" value={form.first_name} onChange={(v) => set("first_name", v)} />
+          <Field label="Middle name" value={form.middle_name} onChange={(v) => set("middle_name", v)} />
           <Field label="Last name" value={form.last_name} onChange={(v) => set("last_name", v)} />
           <Field label="Organization" value={form.organization} onChange={(v) => set("organization", v)} />
           <Field label="Job title" value={form.job_title} onChange={(v) => set("job_title", v)} />

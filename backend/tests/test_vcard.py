@@ -9,7 +9,7 @@ SAMPLE = """BEGIN:VCARD
 VERSION:3.0
 UID:abc-123
 FN:Ada Lovelace
-N:Lovelace;Ada;;;
+N:Lovelace;Ada;Byron;;
 ORG:Analytical Engines
 TITLE:Mathematician
 EMAIL;TYPE=WORK:ada@example.com
@@ -27,6 +27,7 @@ def test_parse_basic_fields():
     assert fields["nextcloud_uid"] == "abc-123"
     assert fields["display_name"] == "Ada Lovelace"
     assert fields["first_name"] == "Ada"
+    assert fields["middle_name"] == "Byron"
     assert fields["last_name"] == "Lovelace"
     assert fields["organization"] == "Analytical Engines"
     assert fields["job_title"] == "Mathematician"
@@ -48,6 +49,7 @@ class FakeContact:
     nextcloud_uid: str | None = "abc-123"
     display_name: str = "Ada Lovelace"
     first_name: str | None = "Ada"
+    middle_name: str | None = "Byron"
     last_name: str | None = "Lovelace"
     organization: str | None = "Analytical Engines"
     job_title: str | None = "Mathematician"
@@ -67,6 +69,7 @@ def test_build_preserves_unknown_properties():
     assert reparsed["display_name"] == "Ada Lovelace"
     assert reparsed["emails"] == [{"type": "work", "value": "ada@example.com"}]
     assert reparsed["nextcloud_uid"] == "abc-123"
+    assert reparsed["middle_name"] == "Byron"
     assert reparsed["gender"] == "female"
 
 

@@ -81,9 +81,10 @@ def parse_vcard(text: str) -> dict[str, Any]:
         return str(node.value) if node is not None and node.value else None
 
     name = getattr(card, "n", None)
-    first = last = None
+    first = middle = last = None
     if name is not None and name.value is not None:
         first = getattr(name.value, "given", None) or None
+        middle = getattr(name.value, "additional", None) or None
         last = getattr(name.value, "family", None) or None
 
     org = getattr(card, "org", None)
@@ -93,8 +94,9 @@ def parse_vcard(text: str) -> dict[str, Any]:
 
     return {
         "nextcloud_uid": val("uid"),
-        "display_name": val("fn") or " ".join(filter(None, [first, last])) or "",
+        "display_name": val("fn") or " ".join(filter(None, [first, middle, last])) or "",
         "first_name": first,
+        "middle_name": middle,
         "last_name": last,
         "organization": org_value,
         "job_title": val("title"),
@@ -133,14 +135,16 @@ def build_vcard(contact: Any, existing_text: str | None = None) -> str:
     reset("uid")
     card.add("uid").value = uid
 
+    middle = getattr(contact, "middle_name", None) or ""
+
     reset("fn")
     card.add("fn").value = contact.display_name or " ".join(
-        filter(None, [contact.first_name, contact.last_name])
+        filter(None, [contact.first_name, middle, contact.last_name])
     ) or "Unnamed"
 
     reset("n")
     card.add("n").value = vobject.vcard.Name(
-        family=contact.last_name or "", given=contact.first_name or ""
+        family=contact.last_name or "", given=contact.first_name or "", additional=middle
     )
 
     if contact.organization:

@@ -57,10 +57,21 @@ def strip_accents(s: str) -> str:
 
 
 def norm_name(first: str | None, last: str | None, display: str | None = None) -> str:
-    """A loose key for matching the same person across sources."""
-    base = " ".join(filter(None, [(first or "").strip(), (last or "").strip()])).strip()
-    if not base:
-        base = (display or "").strip()
+    """A loose key for matching the same person across sources.
+
+    When a last name is present we key on the *first* given name + last name, so
+    middle names (which Prism can't store and which appear inconsistently across
+    sources, e.g. "Lisa Latika Heierli" vs "Lisa Heierli") don't split a person
+    into duplicates. Without a last name we fall back to the full given/display
+    string to avoid over-merging mononyms.
+    """
+    first = (first or "").strip()
+    last = (last or "").strip()
+    if last:
+        given = first.split()[0] if first else ""
+        base = f"{given} {last}".strip()
+    else:
+        base = first or (display or "").strip()
     return re.sub(r"\s+", " ", strip_accents(base).lower()).strip()
 
 
@@ -125,6 +136,7 @@ def split_multi(value: str | None) -> list[str]:
 @dataclass
 class Person:
     first: str = ""
+    middle: str = ""
     last: str = ""
     display: str = ""
     emails: list[dict] = field(default_factory=list)   # {type, value}
@@ -145,7 +157,7 @@ class Person:
 
     @property
     def name(self) -> str:
-        return " ".join(filter(None, [self.first, self.last])) or self.display
+        return " ".join(filter(None, [self.first, self.middle, self.last])) or self.display
 
 
 def _merge_typed(into: list[dict], extra: list[dict]) -> None:
@@ -168,9 +180,7 @@ def parse_google_csv(path: Path) -> tuple[list[Person], list[dict]]:
             first = (row.get("First Name") or "").strip()
             middle = (row.get("Middle Name") or "").strip()
             last = (row.get("Last Name") or "").strip()
-            if middle:
-                first = f"{first} {middle}".strip()
-            display = (row.get("File As") or " ".join(filter(None, [first, last]))).strip()
+            display = (row.get("File As") or " ".join(filter(None, [first, middle, last]))).strip()
             if not (first or last or display):
                 continue  # blank trailing row
 
@@ -204,7 +214,7 @@ def parse_google_csv(path: Path) -> tuple[list[Person], list[dict]]:
                 })
 
             people.append(Person(
-                first=first, last=last, display=display,
+                first=first, middle=middle, last=last, display=display,
                 emails=emails, phones=phones, addresses=addresses,
                 birthday=clean_birthday(row.get("Birthday")),
                 organization=(row.get("Organization Name") or "").strip() or None,
@@ -334,8 +344,6 @@ def parse_monica(path: Path) -> tuple[dict[int, Person], list[tuple[str, int, in
         cid = int(c["id"])
         first = (c.get("first_name") or "").strip()
         middle = (c.get("middle_name") or "").strip()
-        if middle:
-            first = f"{first} {middle}".strip()
         last = (c.get("last_name") or "").strip()
         emails = [{"type": "home", "value": v} for v in fields_by_contact.get(cid, {}).get("email", [])]
         phones = [{"type": "cell", "value": v} for v in fields_by_contact.get(cid, {}).get("phone", [])]
@@ -346,8 +354,8 @@ def parse_monica(path: Path) -> tuple[dict[int, Person], list[tuple[str, int, in
             if sd.get("is_year_unknown") == "0" and sd.get("is_age_based") == "0":
                 bday = clean_birthday(sd.get("date"))
         people[cid] = Person(
-            first=first, last=last,
-            display=" ".join(filter(None, [first, last])),
+            first=first, middle=middle, last=last,
+            display=" ".join(filter(None, [first, middle, last])),
             emails=emails, phones=phones, birthday=bday,
             organization=(c.get("company") or None),
             job_title=(c.get("job") or None),
@@ -443,6 +451,7 @@ def merge(google: list[Person], monica: dict[int, Person]) -> tuple[list[Person]
             tgt.gender = tgt.gender or m.gender
             tgt.notes = tgt.notes or m.notes
             tgt.nickname = tgt.nickname or m.nickname
+            tgt.middle = tgt.middle or m.middle
             _merge_typed(tgt.emails, m.emails)
             _merge_typed(tgt.phones, m.phones)
             tgt.birthday = tgt.birthday or m.birthday
@@ -466,6 +475,7 @@ def merge(google: list[Person], monica: dict[int, Person]) -> tuple[list[Person]
             tgt.job_title = g.job_title or tgt.job_title
             tgt.nickname = tgt.nickname or g.nickname
             tgt.first = tgt.first or g.first
+            tgt.middle = tgt.middle or g.middle
             tgt.last = tgt.last or g.last
             tgt.display = tgt.display or g.display
             tgt.sources |= g.sources
@@ -483,6 +493,15 @@ def merge(google: list[Person], monica: dict[int, Person]) -> tuple[list[Person]
 # --------------------------------------------------------------------------- #
 # Prism API client
 # --------------------------------------------------------------------------- #
+def _err(e: Exception) -> str:
+    """Compact error message, including a server response body when present."""
+    resp = getattr(e, "response", None)
+    if resp is not None:
+        body = (resp.text or "")[:200].replace("\n", " ")
+        return f"HTTP {resp.status_code} {body}"
+    return str(e)
+
+
 class Prism:
     def __init__(self, base_url: str, token: str, verify: bool = True):
         self.base = base_url.rstrip("/")
@@ -510,6 +529,7 @@ def contact_payload(p: Person) -> dict:
     return {
         "display_name": p.name,
         "first_name": p.first or None,
+        "middle_name": p.middle or None,
         "last_name": p.last or None,
         "organization": p.organization,
         "job_title": p.job_title,
@@ -527,6 +547,7 @@ def upload(api: Prism, merged: list[Person], rels, monica_key, *, self_contact_i
     existing = {norm_name(c.get("first_name"), c.get("last_name"), c.get("display_name")): c
                 for c in api.get("/api/contacts")}
     created = updated = 0
+    errors: list[str] = []
     key_to_id: dict[str, int] = {}
 
     for p in merged:
@@ -535,14 +556,17 @@ def upload(api: Prism, merged: list[Person], rels, monica_key, *, self_contact_i
                 key_to_id[p.key] = self_contact_id  # don't duplicate "me"
             continue
         payload = contact_payload(p)
-        if p.key in existing:
-            cid = existing[p.key]["id"]
-            api.patch(f"/api/contacts/{cid}", payload)
-            updated += 1
-        else:
-            cid = api.post("/api/contacts", payload)["id"]
-            created += 1
-        key_to_id[p.key] = cid
+        try:
+            if p.key in existing:
+                cid = existing[p.key]["id"]
+                api.patch(f"/api/contacts/{cid}", payload)
+                updated += 1
+            else:
+                cid = api.post("/api/contacts", payload)["id"]
+                created += 1
+            key_to_id[p.key] = cid
+        except Exception as e:  # noqa: BLE001 - keep going; re-run is idempotent
+            errors.append(f"contact {p.name!r}: {_err(e)}")
     if self_contact_id and self_key:
         key_to_id[self_key] = self_contact_id
 
@@ -569,13 +593,16 @@ def upload(api: Prism, merged: list[Person], rels, monica_key, *, self_contact_i
         if pair in linked:
             rel_skipped += 1
             continue
-        api.post("/api/relationships",
-                 {"from_contact_id": frm, "to_contact_id": to, "type_id": type_id})
-        linked.add(pair)
-        rel_added += 1
+        try:
+            api.post("/api/relationships",
+                     {"from_contact_id": frm, "to_contact_id": to, "type_id": type_id})
+            linked.add(pair)
+            rel_added += 1
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"relationship {frm}->{to} ({prism_name}): {_err(e)}")
 
-    return {"created": created, "updated": updated,
-            "rel_added": rel_added, "rel_skipped": rel_skipped}
+    return {"created": created, "updated": updated, "rel_added": rel_added,
+            "rel_skipped": rel_skipped, "errors": errors}
 
 
 # --------------------------------------------------------------------------- #
@@ -632,6 +659,11 @@ def main() -> None:
                     self_contact_id=self_contact_id, self_key=self_key)
     print(f"\nUploaded: created {result['created']}, updated {result['updated']} contacts; "
           f"added {result['rel_added']} relationships ({result['rel_skipped']} skipped).")
+    errs = result["errors"]
+    if errs:
+        print(f"\n{len(errs)} error(s):")
+        for line in errs[:25]:
+            print("  -", line)
 
 
 if __name__ == "__main__":

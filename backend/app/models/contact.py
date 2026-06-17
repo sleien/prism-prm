@@ -50,6 +50,8 @@ class Contact(Base, TimestampMixin):
     # --- Parsed fields (denormalized from the vCard for display & search) ---
     display_name: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     first_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # vCard N "additional names" component (between given and family names).
+    middle_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     organization: Mapped[str | None] = mapped_column(String(300), nullable=True)
     job_title: Mapped[str | None] = mapped_column(String(200), nullable=True)

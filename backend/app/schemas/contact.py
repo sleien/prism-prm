@@ -26,6 +26,7 @@ class AddressItem(BaseModel):
 class ContactBase(BaseModel):
     display_name: str = Field(default="", max_length=300)
     first_name: str | None = Field(default=None, max_length=200)
+    middle_name: str | None = Field(default=None, max_length=200)
     last_name: str | None = Field(default=None, max_length=200)
     organization: str | None = Field(default=None, max_length=300)
     job_title: str | None = Field(default=None, max_length=200)
@@ -47,6 +48,7 @@ class ContactCreate(ContactBase):
 class ContactUpdate(BaseModel):
     display_name: str | None = Field(default=None, max_length=300)
     first_name: str | None = Field(default=None, max_length=200)
+    middle_name: str | None = Field(default=None, max_length=200)
     last_name: str | None = Field(default=None, max_length=200)
     organization: str | None = Field(default=None, max_length=300)
     job_title: str | None = Field(default=None, max_length=200)
