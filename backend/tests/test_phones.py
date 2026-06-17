@@ -37,3 +37,32 @@ def test_length_mismatch_passthrough():
 def test_empty():
     assert format_phone("", CC, MASK) == ""
     assert format_phone("   ", CC, MASK) == ""
+
+
+TRUNK_MASK = "(x)xx xxx xx xx"  # "(0)" trunk dropped when the country code is shown
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("0793360802", "+41 79 336 08 02"),
+        ("+41 79 123 12 12", "+41 79 123 12 12"),
+        ("00 41 79 731 32 24", "+41 79 731 32 24"),
+        ("+41 44 558 68 08", "+41 44 558 68 08"),
+    ],
+)
+def test_include_country_code_drops_trunk(raw, expected):
+    assert format_phone(raw, CC, TRUNK_MASK, include_country_code=True) == expected
+
+
+def test_trunk_mask_national_form_keeps_leading_zero():
+    # Same mask, but country code not included -> national form "079 …".
+    assert format_phone("0793360802", CC, TRUNK_MASK, include_country_code=False) == "079 336 08 02"
+    assert format_phone("+41 79 123 12 12", CC, TRUNK_MASK) == "079 123 12 12"
+
+
+def test_include_country_code_leaves_foreign_alone():
+    assert (
+        format_phone("+39 339 416 0855", CC, TRUNK_MASK, include_country_code=True)
+        == "+39 339 416 0855"
+    )

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, TimestampMixin
@@ -42,6 +42,10 @@ class User(Base, TimestampMixin):
     )
     phone_number_format: Mapped[str] = mapped_column(
         String(40), default="xxx xxx xx xx", server_default="xxx xxx xx xx", nullable=False
+    )
+    # Prepend the country code to formatted phone numbers (drops the trunk 0).
+    phone_include_country_code: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
     )
 
     # Per-user Nextcloud account. The app password is stored encrypted. When

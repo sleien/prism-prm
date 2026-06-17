@@ -62,6 +62,7 @@ async def build_me(session: AsyncSession, user: User) -> MeOut:
         default_currency=user.default_currency,
         phone_country_code=user.phone_country_code,
         phone_number_format=user.phone_number_format,
+        phone_include_country_code=user.phone_include_country_code,
         nextcloud_configured=user_has_nextcloud(user),
         nextcloud_url=user.nextcloud_url,
         nextcloud_username=user.nextcloud_username,
@@ -204,6 +205,8 @@ async def set_preferences(
         user.phone_country_code = payload.phone_country_code
     if payload.phone_number_format is not None:
         user.phone_number_format = payload.phone_number_format
+    if payload.phone_include_country_code is not None:
+        user.phone_include_country_code = payload.phone_include_country_code
     await session.commit()
     await session.refresh(user)
     return await build_me(session, user)

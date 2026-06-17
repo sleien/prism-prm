@@ -12,6 +12,7 @@ export interface Me {
   default_currency: string;
   phone_country_code: string;
   phone_number_format: string;
+  phone_include_country_code: boolean;
   nextcloud_configured: boolean;
   nextcloud_url?: string | null;
   nextcloud_username?: string | null;

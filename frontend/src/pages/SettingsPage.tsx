@@ -27,6 +27,7 @@ export function SettingsPage() {
   const [currency, setCurrency] = useState("CHF");
   const [phoneCC, setPhoneCC] = useState("+41");
   const [phoneFmt, setPhoneFmt] = useState("xxx xxx xx xx");
+  const [phoneIncCC, setPhoneIncCC] = useState(false);
   const [ncUrl, setNcUrl] = useState("");
   const [ncUser, setNcUser] = useState("");
   const [ncPass, setNcPass] = useState("");
@@ -39,6 +40,7 @@ export function SettingsPage() {
     setCurrency(me.default_currency);
     setPhoneCC(me.phone_country_code);
     setPhoneFmt(me.phone_number_format);
+    setPhoneIncCC(me.phone_include_country_code);
     setNcUrl(me.nextcloud_url ?? "");
     setNcUser(me.nextcloud_username ?? "");
     setNcBook(me.nextcloud_addressbook ?? "");
@@ -68,6 +70,7 @@ export function SettingsPage() {
       default_currency: currency,
       phone_country_code: phoneCC,
       phone_number_format: phoneFmt,
+      phone_include_country_code: phoneIncCC,
     });
     await refresh();
     setFlash("Preferences saved");
@@ -113,6 +116,23 @@ export function SettingsPage() {
             <Input id="p-fmt" value={phoneFmt} onChange={(e) => setPhoneFmt(e.target.value)} />
           </div>
         </div>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={phoneIncCC}
+            onChange={(e) => setPhoneIncCC(e.target.checked)}
+            className="h-4 w-4 accent-[hsl(var(--primary))]"
+          />
+          Include country code in saved numbers
+        </label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Wrap the trunk digit in parentheses (e.g. <code>(x)xx xxx xx xx</code>) so it’s dropped
+          when the country code is shown. Example:{" "}
+          <span className="text-foreground">
+            {phoneIncCC ? `${phoneCC} 79 123 12 12` : "079 123 12 12"}
+          </span>
+          .
+        </p>
         <Button className="mt-3" onClick={() => void savePrefs()}>
           Save preferences
         </Button>

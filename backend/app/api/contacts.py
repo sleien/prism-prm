@@ -114,7 +114,10 @@ async def create_contact(
     tag_names = data.pop("tags", [])
     data["emails"] = _to_dicts(payload.emails)
     data["phones"] = format_phones(
-        _to_dicts(payload.phones), user.phone_country_code, user.phone_number_format
+        _to_dicts(payload.phones),
+        user.phone_country_code,
+        user.phone_number_format,
+        user.phone_include_country_code,
     )
     data["addresses"] = _to_dicts(payload.addresses)
     contact = Contact(
@@ -147,7 +150,10 @@ async def update_contact(
             updates[field] = _to_dicts(getattr(payload, field))
     if updates.get("phones") is not None:
         updates["phones"] = format_phones(
-            updates["phones"], user.phone_country_code, user.phone_number_format
+            updates["phones"],
+            user.phone_country_code,
+            user.phone_number_format,
+            user.phone_include_country_code,
         )
     for key, value in updates.items():
         setattr(contact, key, value)
