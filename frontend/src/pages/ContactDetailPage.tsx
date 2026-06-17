@@ -31,6 +31,7 @@ function ageFrom(bday?: string | null): number | null {
 
 export function ContactDetailPage() {
   const params = useParams<{ id: string }>();
+  const isNew = params.id === "new"; // /contacts/new renders this form in create mode
   const id = Number(params.id);
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -41,6 +42,7 @@ export function ContactDetailPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["contact", id],
     queryFn: () => api.get<Contact>(`/api/contacts/${id}`),
+    enabled: !isNew,
   });
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get<UserOut[]>("/api/users") });
 
@@ -58,8 +60,10 @@ export function ContactDetailPage() {
       setEmails(data.emails ?? []);
       setPhones(data.phones ?? []);
       setAddresses(data.addresses ?? []);
+    } else if (isNew) {
+      setForm({ visibility: "private" });
     }
-  }, [data]);
+  }, [data, isNew]);
 
   function set<K extends keyof Contact>(key: K, value: Contact[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -70,21 +74,28 @@ export function ContactDetailPage() {
     setErr(null);
     setMsg(null);
     setBusy(true);
+    const payload = {
+      display_name: form.display_name,
+      first_name: form.first_name,
+      last_name: form.last_name,
+      organization: form.organization,
+      job_title: form.job_title,
+      birthday: form.birthday || null,
+      notes: form.notes,
+      visibility: form.visibility,
+      linked_user_id: form.linked_user_id ?? null,
+      emails: emails.filter((x) => x.value),
+      phones: phones.filter((x) => x.value),
+      addresses: addresses.filter((a) => a.street || a.city || a.country),
+    };
     try {
-      await api.patch<Contact>(`/api/contacts/${id}`, {
-        display_name: form.display_name,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        organization: form.organization,
-        job_title: form.job_title,
-        birthday: form.birthday || null,
-        notes: form.notes,
-        visibility: form.visibility,
-        linked_user_id: form.linked_user_id ?? null,
-        emails: emails.filter((x) => x.value),
-        phones: phones.filter((x) => x.value),
-        addresses: addresses.filter((a) => a.street || a.city || a.country),
-      });
+      if (isNew) {
+        const created = await api.post<Contact>("/api/contacts", payload);
+        await qc.invalidateQueries({ queryKey: ["contacts"] });
+        navigate(`/contacts/${created.id}`, { replace: true });
+        return;
+      }
+      await api.patch<Contact>(`/api/contacts/${id}`, payload);
       await qc.invalidateQueries({ queryKey: ["contact", id] });
       await qc.invalidateQueries({ queryKey: ["contacts"] });
       setMsg("Saved — syncing to Nextcloud.");
@@ -110,7 +121,7 @@ export function ContactDetailPage() {
   }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (error || !data)
+  if (!isNew && (error || !data))
     return (
       <div className="space-y-4">
         <BackLink />
@@ -126,22 +137,28 @@ export function ContactDetailPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <BackLink />
-        <Badge className={visibilityStyles[data.visibility]}>{data.visibility}</Badge>
-        {data.dirty ? (
-          <span className="text-xs text-amber-500">• pending sync</span>
-        ) : data.last_synced_at ? (
-          <span className="text-xs text-muted-foreground">
-            synced {new Date(data.last_synced_at).toLocaleString()}
-          </span>
+        {isNew ? (
+          <span className="font-medium">New contact</span>
+        ) : data ? (
+          <>
+            <Badge className={visibilityStyles[data.visibility]}>{data.visibility}</Badge>
+            {data.dirty ? (
+              <span className="text-xs text-amber-500">• pending sync</span>
+            ) : data.last_synced_at ? (
+              <span className="text-xs text-muted-foreground">
+                synced {new Date(data.last_synced_at).toLocaleString()}
+              </span>
+            ) : null}
+            <Button
+              variant="ghost"
+              className="ml-auto text-destructive"
+              onClick={() => void remove()}
+              disabled={busy}
+            >
+              <Trash2 size={16} /> Delete
+            </Button>
+          </>
         ) : null}
-        <Button
-          variant="ghost"
-          className="ml-auto text-destructive"
-          onClick={() => void remove()}
-          disabled={busy}
-        >
-          <Trash2 size={16} /> Delete
-        </Button>
       </div>
 
       <Card className="p-5">
@@ -222,7 +239,7 @@ export function ContactDetailPage() {
           </div>
           <div className="flex items-center gap-3 sm:col-span-2">
             <Button type="submit" disabled={busy}>
-              {busy ? "Saving…" : "Save changes"}
+              {busy ? "Saving…" : isNew ? "Create contact" : "Save changes"}
             </Button>
             {msg && <span className="text-sm text-emerald-500">{msg}</span>}
             {err && <span className="text-sm text-destructive">{err}</span>}
@@ -230,7 +247,7 @@ export function ContactDetailPage() {
         </form>
       </Card>
 
-      {data.latitude != null && data.longitude != null && (
+      {data?.latitude != null && data?.longitude != null && (
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
             <MapPin size={15} /> {addresses[0]?.city || addresses[0]?.street || "Address location"}
@@ -244,8 +261,12 @@ export function ContactDetailPage() {
         </Card>
       )}
 
-      <RelationshipsSection contactId={id} />
-      <LifeEventsSection contactId={id} />
+      {!isNew && (
+        <>
+          <RelationshipsSection contactId={id} />
+          <LifeEventsSection contactId={id} />
+        </>
+      )}
     </div>
   );
 }
