@@ -97,6 +97,7 @@ export interface RelatedContact {
   contact_id: number;
   contact_name: string;
   label: string;
+  derived?: boolean;
 }
 
 export interface LifeEventType {

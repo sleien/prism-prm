@@ -100,6 +100,43 @@ async def test_relationship_type_male_female_editable(client):
 
 
 @pytest.mark.asyncio
+async def test_auto_grandparents_derived_from_parent_chain(client):
+    await _register(client, "a@example.com", "A")
+    parent = next(
+        t for t in (await client.get("/api/relationship-types")).json() if t["name"] == "Parent"
+    )
+
+    async def mk(name, gender=None):
+        body = {"display_name": name}
+        if gender:
+            body["gender"] = gender
+        return (await client.post("/api/contacts", json=body)).json()["id"]
+
+    me = await mk("Me")
+    mom = await mk("Mom", "female")
+    granny = await mk("Granny", "female")
+    # me's parent is mom; mom's parent is granny (from=child, to=parent).
+    await client.post(
+        "/api/relationships", json={"from_contact_id": me, "to_contact_id": mom, "type_id": parent["id"]}
+    )
+    await client.post(
+        "/api/relationships",
+        json={"from_contact_id": mom, "to_contact_id": granny, "type_id": parent["id"]},
+    )
+
+    mine = {r["contact_name"]: r for r in (await client.get(f"/api/contacts/{me}/relationships")).json()}
+    assert mine["Mom"]["label"] == "Mother" and mine["Mom"]["derived"] is False
+    assert mine["Granny"]["label"] == "Grandmother"  # auto-derived, gendered
+    assert mine["Granny"]["derived"] is True
+    assert mine["Granny"]["relationship_id"] == 0
+
+    # The reverse: from Granny's view, Me is an (auto) grandchild.
+    hers = {r["contact_name"]: r for r in (await client.get(f"/api/contacts/{granny}/relationships")).json()}
+    assert hers["Mom"]["label"] == "Daughter"
+    assert hers["Me"]["label"] == "Grandchild" and hers["Me"]["derived"] is True
+
+
+@pytest.mark.asyncio
 async def test_relationship_to_self_rejected(client):
     await _register(client, "a@example.com", "A")
     types = (await client.get("/api/relationship-types")).json()

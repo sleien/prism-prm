@@ -530,15 +530,29 @@ function RelationshipsSection({ contactId }: { contactId: number }) {
       <div className="mb-3 font-medium">Relationships</div>
       <div className="mb-3 flex flex-wrap gap-2">
         {(rels ?? []).map((r) => (
-          <span key={r.relationship_id} className="flex items-center gap-1 rounded-full border px-3 py-1 text-sm">
+          <span
+            key={`${r.relationship_id}:${r.contact_id}`}
+            className={`flex items-center gap-1 rounded-full border px-3 py-1 text-sm ${
+              r.derived ? "border-dashed text-muted-foreground" : ""
+            }`}
+          >
             <span className="text-muted-foreground">{r.label}:</span>
             <Link to={`/contacts/${r.contact_id}`} className="hover:underline">
               {r.contact_name}
               {r.contact_id === selfId ? " (you)" : ""}
             </Link>
-            <button onClick={() => void remove(r.relationship_id)} className="text-muted-foreground hover:text-destructive">
-              <Trash2 size={13} />
-            </button>
+            {r.derived ? (
+              <span className="text-xs text-muted-foreground" title="Inferred from parent links">
+                auto
+              </span>
+            ) : (
+              <button
+                onClick={() => void remove(r.relationship_id)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
           </span>
         ))}
         {rels && rels.length === 0 && <span className="text-sm text-muted-foreground">No relationships yet.</span>}

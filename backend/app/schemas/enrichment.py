@@ -42,10 +42,11 @@ class RelationshipCreate(BaseModel):
 class RelatedContactOut(BaseModel):
     """One relationship as seen from a given contact's perspective."""
 
-    relationship_id: int
+    relationship_id: int  # 0 for derived (auto) relationships
     contact_id: int  # the other person
     contact_name: str
     label: str  # how the other person relates to the viewed contact
+    derived: bool = False  # inferred (e.g. grandparent via two parent links), not stored
 
 
 # --- life-event types ---

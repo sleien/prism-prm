@@ -7,6 +7,8 @@ each user's own annotations on the contacts they can see.
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -240,6 +242,77 @@ async def list_relationships(
                 label=_gendered_label(base, other.gender if other else None, male, female),
             )
         )
+    # Append grandparents/grandchildren inferred from two chained parent links.
+    out.extend(
+        await _derived_grandrelations(
+            session, user, contact_id, types, {o.contact_id for o in out}
+        )
+    )
+    return out
+
+
+_PARENT_NAME = "Parent"
+_GRANDPARENT_NAME = "Grandparent"
+
+
+async def _derived_grandrelations(
+    session: AsyncSession,
+    user: User,
+    contact_id: int,
+    types: dict[str, RelationshipType],
+    taken: set[int],
+) -> list[RelatedContactOut]:
+    """Read-only grandparent/grandchild entries inferred from two chained parent
+    links (e.g. my mother's mother is my grandmother). Deduped against `taken`
+    (contacts already shown via a stored relationship)."""
+    edges = await session.scalars(
+        select(ContactRelationship).where(
+            ContactRelationship.owner_id == user.id,
+            ContactRelationship.name == _PARENT_NAME,  # from=child, to=parent
+        )
+    )
+    parents_of: dict[int, set[int]] = defaultdict(set)
+    children_of: dict[int, set[int]] = defaultdict(set)
+    for e in edges:
+        parents_of[e.from_contact_id].add(e.to_contact_id)
+        children_of[e.to_contact_id].add(e.from_contact_id)
+
+    grandparents = {gp for p in parents_of.get(contact_id, ()) for gp in parents_of.get(p, ())}
+    grandparents -= {contact_id, *parents_of.get(contact_id, ())}
+    grandchildren = {gc for c in children_of.get(contact_id, ()) for gc in children_of.get(c, ())}
+    grandchildren -= {contact_id, *children_of.get(contact_id, ())}
+
+    gp = types.get(_GRANDPARENT_NAME)
+    out: list[RelatedContactOut] = []
+
+    async def emit(ids: set[int], base: str, male: str | None, female: str | None) -> None:
+        for cid in sorted(ids):
+            if cid in taken:
+                continue
+            taken.add(cid)
+            other = await session.get(Contact, cid)
+            out.append(
+                RelatedContactOut(
+                    relationship_id=0,
+                    contact_id=cid,
+                    contact_name=(other.display_name if other else "Unknown"),
+                    label=_gendered_label(base, other.gender if other else None, male, female),
+                    derived=True,
+                )
+            )
+
+    await emit(
+        grandparents,
+        "Grandparent",
+        gp.name_male if gp else None,
+        gp.name_female if gp else None,
+    )
+    await emit(
+        grandchildren,
+        "Grandchild",
+        gp.reverse_name_male if gp else None,
+        gp.reverse_name_female if gp else None,
+    )
     return out
 
 
