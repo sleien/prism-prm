@@ -222,9 +222,27 @@ export function JournalPage() {
         </div>
       )}
 
-      {selected && <JournalEntryEditor template={selected} />}
+      {selected && <JournalEntryEditor key={selected.id} template={selected} />}
     </div>
   );
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** The canonical entry_date for a picked date, matching the backend's period math:
+ * daily -> the date itself; weekly -> the Monday of that ISO week. */
+function periodDateFor(dateStr: string, cadence: "daily" | "weekly"): string {
+  if (cadence !== "weekly") return dateStr;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const mondayOffset = (dt.getDay() + 6) % 7; // JS Sun=0 -> ISO Mon=0
+  dt.setDate(dt.getDate() - mondayOffset);
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
 function JournalEntryEditor({ template }: { template: JournalTemplate }) {
@@ -235,15 +253,21 @@ function JournalEntryEditor({ template }: { template: JournalTemplate }) {
   });
 
   const { formatDate } = useDateFormat();
+  const [entryDate, setEntryDate] = useState<string>(todayLocal());
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Prefill from the most recent entry when the template or its entries change.
+  // The existing entry covering the picked date (if any), matched on the
+  // backend's period boundary so weekly journals load by their Monday.
+  const periodDate = periodDateFor(entryDate, template.cadence);
+  const existing = entries?.find((en) => en.entry_date === periodDate) ?? null;
+
+  // Prefill from the entry for the selected period, or blank for a new one.
   useEffect(() => {
-    setAnswers((entries?.[0]?.data as Record<string, Answer>) ?? {});
+    setAnswers((existing?.data as Record<string, Answer>) ?? {});
     setMsg(null);
-  }, [template.id, entries]);
+  }, [existing]);
 
   function setAnswer(id: string, value: Answer) {
     setAnswers((a) => ({ ...a, [id]: value }));
@@ -254,7 +278,10 @@ function JournalEntryEditor({ template }: { template: JournalTemplate }) {
     setBusy(true);
     setMsg(null);
     try {
-      await api.put(`/api/journal/templates/${template.id}/entries`, { data: answers });
+      await api.put(`/api/journal/templates/${template.id}/entries`, {
+        data: answers,
+        entry_date: entryDate,
+      });
       await qc.invalidateQueries({ queryKey: ["journal-entries", template.id] });
       await qc.invalidateQueries({ queryKey: ["summary"] });
       setMsg("Saved ✓");
@@ -278,6 +305,21 @@ function JournalEntryEditor({ template }: { template: JournalTemplate }) {
       </div>
 
       <form onSubmit={submit} className="space-y-4">
+        <div className="max-w-[12rem]">
+          <Label htmlFor="entry-date">Date</Label>
+          <Input
+            id="entry-date"
+            type="date"
+            max={todayLocal()}
+            value={entryDate}
+            onChange={(e) => setEntryDate(e.target.value || todayLocal())}
+          />
+          {template.cadence === "weekly" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Week of {formatDate(periodDate)}
+            </p>
+          )}
+        </div>
         {template.prompts.map((p) => (
           <div key={p.id}>
             <Label htmlFor={`a-${p.id}`}>{p.label || p.id}</Label>
@@ -321,7 +363,7 @@ function JournalEntryEditor({ template }: { template: JournalTemplate }) {
         ))}
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={busy}>
-            {busy ? "Saving…" : "Save entry"}
+            {busy ? "Saving…" : existing ? "Update entry" : "Save entry"}
           </Button>
           {msg && <span className="text-sm text-emerald-500">{msg}</span>}
         </div>
@@ -332,9 +374,18 @@ function JournalEntryEditor({ template }: { template: JournalTemplate }) {
           <div className="mb-2 text-sm font-medium text-muted-foreground">History</div>
           <ul className="space-y-1 text-sm">
             {entries.map((en) => (
-              <li key={en.id} className="flex items-center justify-between gap-2 border-b border-border/50 py-1">
-                <span>{formatDate(en.entry_date)}</span>
-                {en.mood != null && <span className="text-muted-foreground">mood {en.mood}</span>}
+              <li key={en.id} className="border-b border-border/50">
+                <button
+                  type="button"
+                  onClick={() => setEntryDate(en.entry_date)}
+                  className={
+                    "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left transition hover:bg-accent " +
+                    (en.entry_date === periodDate ? "bg-accent" : "")
+                  }
+                >
+                  <span>{formatDate(en.entry_date)}</span>
+                  {en.mood != null && <span className="text-muted-foreground">mood {en.mood}</span>}
+                </button>
               </li>
             ))}
           </ul>
