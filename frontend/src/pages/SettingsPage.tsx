@@ -30,6 +30,9 @@ export function SettingsPage() {
   const [phoneFmt, setPhoneFmt] = useState("xxx xxx xx xx");
   const [phoneIncCC, setPhoneIncCC] = useState(false);
   const [dateFmt, setDateFmt] = useState("dd.mm.yyyy");
+  const [phoneType, setPhoneType] = useState("mobile");
+  const [emailType, setEmailType] = useState("home");
+  const [addressType, setAddressType] = useState("home");
   const [ncUrl, setNcUrl] = useState("");
   const [ncUser, setNcUser] = useState("");
   const [ncPass, setNcPass] = useState("");
@@ -44,6 +47,9 @@ export function SettingsPage() {
     setPhoneFmt(me.phone_number_format);
     setPhoneIncCC(me.phone_include_country_code);
     setDateFmt(me.date_format);
+    setPhoneType(me.default_phone_type);
+    setEmailType(me.default_email_type);
+    setAddressType(me.default_address_type);
     setNcUrl(me.nextcloud_url ?? "");
     setNcUser(me.nextcloud_username ?? "");
     setNcBook(me.nextcloud_addressbook ?? "");
@@ -75,6 +81,9 @@ export function SettingsPage() {
       phone_number_format: phoneFmt,
       phone_include_country_code: phoneIncCC,
       date_format: dateFmt,
+      default_phone_type: phoneType,
+      default_email_type: emailType,
+      default_address_type: addressType,
     });
     await refresh();
     setFlash("Preferences saved");
@@ -129,7 +138,23 @@ export function SettingsPage() {
               ))}
             </Select>
           </div>
+          <div>
+            <Label htmlFor="p-ptype">Default phone label</Label>
+            <Input id="p-ptype" value={phoneType} onChange={(e) => setPhoneType(e.target.value)} placeholder="mobile" />
+          </div>
+          <div>
+            <Label htmlFor="p-etype">Default email label</Label>
+            <Input id="p-etype" value={emailType} onChange={(e) => setEmailType(e.target.value)} placeholder="home" />
+          </div>
+          <div>
+            <Label htmlFor="p-atype">Default address label</Label>
+            <Input id="p-atype" value={addressType} onChange={(e) => setAddressType(e.target.value)} placeholder="home" />
+          </div>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          The label prefilled when you add a new phone, email, or address to a contact (e.g.{" "}
+          <code>mobile</code>, <code>home</code>, <code>work</code>).
+        </p>
         <label className="mt-3 flex items-center gap-2 text-sm">
           <input
             type="checkbox"

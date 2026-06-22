@@ -51,6 +51,16 @@ class User(Base, TimestampMixin):
     date_format: Mapped[str] = mapped_column(
         String(12), default="dd.mm.yyyy", server_default="dd.mm.yyyy", nullable=False
     )
+    # Default type/label prefilled when adding a new email/phone/address to a contact.
+    default_phone_type: Mapped[str] = mapped_column(
+        String(20), default="mobile", server_default="mobile", nullable=False
+    )
+    default_email_type: Mapped[str] = mapped_column(
+        String(20), default="home", server_default="home", nullable=False
+    )
+    default_address_type: Mapped[str] = mapped_column(
+        String(20), default="home", server_default="home", nullable=False
+    )
 
     # Per-user Nextcloud account. The app password is stored encrypted. When
     # unset, the instance-level NEXTCLOUD_* env settings act as a fallback.

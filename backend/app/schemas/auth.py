@@ -36,6 +36,9 @@ class MeOut(BaseModel):
     phone_number_format: str = "xxx xxx xx xx"
     phone_include_country_code: bool = False
     date_format: str = "dd.mm.yyyy"
+    default_phone_type: str = "mobile"
+    default_email_type: str = "home"
+    default_address_type: str = "home"
     # Whether this user has a usable Nextcloud (personal creds or instance fallback).
     nextcloud_configured: bool = False
     # Personal Nextcloud config (password never returned).
@@ -55,6 +58,9 @@ class PreferencesIn(BaseModel):
     phone_number_format: str | None = Field(default=None, max_length=40)
     phone_include_country_code: bool | None = None
     date_format: str | None = Field(default=None, max_length=12)
+    default_phone_type: str | None = Field(default=None, max_length=20)
+    default_email_type: str | None = Field(default=None, max_length=20)
+    default_address_type: str | None = Field(default=None, max_length=20)
 
 
 class NextcloudSettingsIn(BaseModel):

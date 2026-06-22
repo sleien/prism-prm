@@ -259,19 +259,30 @@ export function ContactDetailPage() {
           </div>
 
           <div className="sm:col-span-2">
-            <ValueListEditor label="Emails" placeholder="name@example.com" items={emails} onChange={setEmails} />
+            <ValueListEditor
+              label="Emails"
+              placeholder="name@example.com"
+              newType={me?.default_email_type ?? "home"}
+              items={emails}
+              onChange={setEmails}
+            />
           </div>
           <div className="sm:col-span-2">
             <ValueListEditor
               label="Phones"
               placeholder={phonePlaceholder}
               newValue={`${phoneCc} `}
+              newType={me?.default_phone_type ?? "mobile"}
               items={phones}
               onChange={setPhones}
             />
           </div>
           <div className="sm:col-span-2">
-            <AddressListEditor items={addresses} onChange={setAddresses} />
+            <AddressListEditor
+              newType={me?.default_address_type ?? "home"}
+              items={addresses}
+              onChange={setAddresses}
+            />
           </div>
           <div className="sm:col-span-2">
             <TagEditor tags={tags} onChange={setTags} />
@@ -357,12 +368,14 @@ function ValueListEditor({
   items,
   onChange,
   newValue = "",
+  newType = "home",
 }: {
   label: string;
   placeholder: string;
   items: TypedValue[];
   onChange: (v: TypedValue[]) => void;
   newValue?: string;
+  newType?: string;
 }) {
   return (
     <div>
@@ -396,7 +409,7 @@ function ValueListEditor({
         type="button"
         variant="ghost"
         className="mt-1"
-        onClick={() => onChange([...items, { type: "home", value: newValue }])}
+        onClick={() => onChange([...items, { type: newType, value: newValue }])}
       >
         <Plus size={14} /> Add {label.toLowerCase().replace(/s$/, "")}
       </Button>
@@ -407,9 +420,11 @@ function ValueListEditor({
 function AddressListEditor({
   items,
   onChange,
+  newType = "home",
 }: {
   items: AddressItem[];
   onChange: (v: AddressItem[]) => void;
+  newType?: string;
 }) {
   const upd = (i: number, patch: Partial<AddressItem>) =>
     onChange(items.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -441,7 +456,7 @@ function AddressListEditor({
         variant="ghost"
         className="mt-1"
         onClick={() =>
-          onChange([...items, { type: "home", street: "", city: "", region: "", code: "", country: "" }])
+          onChange([...items, { type: newType, street: "", city: "", region: "", code: "", country: "" }])
         }
       >
         <Plus size={14} /> Add address (geocoded to a map)

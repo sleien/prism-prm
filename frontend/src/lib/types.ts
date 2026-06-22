@@ -14,6 +14,9 @@ export interface Me {
   phone_number_format: string;
   phone_include_country_code: boolean;
   date_format: string;
+  default_phone_type: string;
+  default_email_type: string;
+  default_address_type: string;
   nextcloud_configured: boolean;
   nextcloud_url?: string | null;
   nextcloud_username?: string | null;

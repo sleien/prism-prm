@@ -64,6 +64,9 @@ async def build_me(session: AsyncSession, user: User) -> MeOut:
         phone_number_format=user.phone_number_format,
         phone_include_country_code=user.phone_include_country_code,
         date_format=user.date_format,
+        default_phone_type=user.default_phone_type,
+        default_email_type=user.default_email_type,
+        default_address_type=user.default_address_type,
         nextcloud_configured=user_has_nextcloud(user),
         nextcloud_url=user.nextcloud_url,
         nextcloud_username=user.nextcloud_username,
@@ -210,6 +213,12 @@ async def set_preferences(
         user.phone_include_country_code = payload.phone_include_country_code
     if payload.date_format is not None:
         user.date_format = payload.date_format
+    if payload.default_phone_type is not None:
+        user.default_phone_type = payload.default_phone_type
+    if payload.default_email_type is not None:
+        user.default_email_type = payload.default_email_type
+    if payload.default_address_type is not None:
+        user.default_address_type = payload.default_address_type
     await session.commit()
     await session.refresh(user)
     return await build_me(session, user)
